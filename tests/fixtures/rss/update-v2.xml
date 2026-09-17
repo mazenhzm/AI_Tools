@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>AI Discovery Test Feed (v2)</title>
+    <link>https://feed.example.com</link>
+    <description>Same source item, changed content</description>
+    <item>
+      <title>Acme Writer</title>
+      <link>https://acme-writer.example.com/</link>
+      <guid>acme-writer-001</guid>
+      <description>An AI writing assistant that now also supports Arabic drafting, tone controls and team glossaries.</description>
+      <pubDate>Thu, 10 Sep 2026 09:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Partial Feed</title>
+    <link>https://partial.example.com</link>
+    <description>Contains one valid and one unusable item</description>
+    <item>
+      <title>Delta Notes</title>
+      <link>https://deltanotes.example.com</link>
+      <guid>delta-001</guid>
+      <description>Note taking with AI summaries.</description>
+    </item>
+    <item>
+      <link>https://mystery.example.com</link>
+      <guid>mystery-002</guid>
+    </item>
+    <item>
+      <title>Epsilon Studio</title>
+      <guid>epsilon-003</guid>
+      <description>A design tool without a public website link.</description>
+    </item>
+  </channel>
+</rss>

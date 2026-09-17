@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>AI Discovery Test Feed</title>
+    <link>https://feed.example.com</link>
+    <description>Deterministic fixture feed for tests</description>
+    <item>
+      <title>Acme Writer</title>
+      <link>https://acme-writer.example.com/?utm_source=rss</link>
+      <guid>acme-writer-001</guid>
+      <description>An AI writing assistant for drafting and editing long-form content.</description>
+      <pubDate>Mon, 01 Jun 2026 10:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>BetaVision</title>
+      <link>https://betavision.example.com</link>
+      <guid>betavision-002</guid>
+      <description>Image generation and editing platform.</description>
+      <pubDate>Tue, 02 Jun 2026 11:30:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Gamma Code</title>
+      <link>https://gammacode.example.com/</link>
+      <guid>gammacode-003</guid>
+      <description>AI pair programmer for developers.</description>
+      <pubDate>Wed, 03 Jun 2026 08:15:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>AI Discovery Test Feed (v1)</title>
+    <link>https://feed.example.com</link>
+    <description>Deterministic fixture feed used for update-monitoring tests</description>
+    <item>
+      <title>Acme Writer</title>
+      <link>https://acme-writer.example.com/</link>
+      <guid>acme-writer-001</guid>
+      <description>An AI writing assistant for drafting and editing long-form content.</description>
+      <pubDate>Mon, 01 Jun 2026 10:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

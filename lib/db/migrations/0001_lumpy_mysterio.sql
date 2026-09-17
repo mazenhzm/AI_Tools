@@ -1,0 +1,1 @@
+ALTER TYPE "public"."item_status" ADD VALUE 'updated' BEFORE 'ai_processing';

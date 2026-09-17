@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: dark;
+  --background: #0b0e14;
+  --foreground: #e8eef6;
+  --muted: #141a23;
+  --muted-foreground: #9aa7b8;
+  --border: #223041;
+  --card: #101720;
+  --accent: #1a2330;
+  --primary: #4f7cff;
+  --primary-foreground: #f8fafc;
+  --ring: #4f7cff;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-card: var(--card);
+  --color-accent: var(--accent);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-ring: var(--ring);
+  --font-sans: system-ui, -apple-system, "Segoe UI", "Noto Sans Arabic",
+    Tahoma, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+html {
+  scrollbar-color: var(--border) transparent;
+}
+
+body {
+  background-color: var(--background);
+  background-image: radial-gradient(
+    60rem 60rem at 50% -25rem,
+    color-mix(in oklab, var(--primary) 12%, transparent),
+    transparent 70%
+  );
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  color: var(--foreground);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    "Noto Sans Arabic",
+    "Tahoma",
+    Arial,
+    sans-serif;
+  line-height: 1.7;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--primary) 40%, transparent);
+  color: var(--foreground);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+a {
+  color: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+}

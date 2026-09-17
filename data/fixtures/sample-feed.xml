@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Offline sample feed used by the seeded "sample-feed" source so ingestion and
+  the worker can be demonstrated without any network access.
+  All items are clearly marked as samples and are NOT real product data.
+-->
+<rss version="2.0">
+  <channel>
+    <title>[Sample] AI Discovery Offline Feed</title>
+    <link>https://example.com/sample-feed</link>
+    <description>Sample-only feed for local development. Not real data.</description>
+    <item>
+      <title>[Sample] Voice Notes AI</title>
+      <link>https://sample-voice-notes.example.com</link>
+      <guid>sample-voice-notes</guid>
+      <description>[SAMPLE DATA] Placeholder entry used to exercise the ingestion pipeline.</description>
+      <pubDate>Mon, 01 Jun 2026 10:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>[Sample] Meeting Summarizer</title>
+      <link>https://sample-meeting-summary.example.com</link>
+      <guid>sample-meeting-summary</guid>
+      <description>[SAMPLE DATA] Placeholder entry used to exercise the ingestion pipeline.</description>
+      <pubDate>Tue, 02 Jun 2026 09:30:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

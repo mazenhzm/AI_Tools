@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:16.4-alpine
+    container_name: aidiscovery-pg
+    environment:
+      POSTGRES_USER: aidiscovery
+      POSTGRES_PASSWORD: aidiscovery_dev
+      POSTGRES_DB: aidiscovery_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      # init scripts: creates the separate test database
+      - ./infra/pg-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aidiscovery -d aidiscovery_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  db_data:
