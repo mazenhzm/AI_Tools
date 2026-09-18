@@ -13,6 +13,7 @@
     "db:seed": "tsx scripts/seed.ts",
     "db:seed:admin": "tsx scripts/seed-admin.ts",
     "worker": "tsx scripts/worker.ts",
+    "worker:models": "tsx scripts/worker-models.ts",
     "smoke": "tsx scripts/smoke.ts",
     "db:backup": "tsx scripts/backup.ts",
     "test": "vitest run",

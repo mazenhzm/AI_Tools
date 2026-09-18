@@ -10,8 +10,11 @@ const NAV = [
   { href: "/admin/categories", label: "التصنيفات" },
   { href: "/admin/tags", label: "الوسوم" },
   { href: "/admin/collections", label: "القوائم" },
+  { href: "/admin/models", label: "النماذج" },
   { href: "/admin/sources", label: "المصادر" },
   { href: "/admin/runs", label: "التشغيلات" },
+  { href: "/admin/subscriptions", label: "الاشتراكات" },
+  { href: "/admin/notifications", label: "الإشعارات" },
   { href: "/admin/monetization", label: "التمويل" },
 ];
 

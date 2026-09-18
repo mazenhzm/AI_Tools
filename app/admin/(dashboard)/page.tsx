@@ -65,6 +65,16 @@ export default async function AdminDashboardPage() {
           }
         />
         <StatCard label="مسودات" value={stats.byStatus.draft ?? 0} />
+        <StatCard
+          label="النماذج"
+          value={stats.totalModels}
+          hint="الملف الكامل في /admin/models"
+        />
+        <StatCard label="الاشتراكات" value={stats.totalSubscriptions} />
+        <StatCard
+          label="أحداث الإشعارات"
+          value={stats.totalNotificationEvents}
+        />
       </div>
 
       <section className="flex flex-col gap-3">

@@ -109,6 +109,33 @@ export const analyticsEvent = pgEnum("analytics_event", [
 
 export const adminRole = pgEnum("admin_role", ["admin", "editor"]);
 
+export const modelUpdateKind = pgEnum("model_update_kind", [
+  "new_model",
+  "new_version",
+  "pricing",
+  "context_window",
+  "modality",
+  "availability",
+  "metadata",
+]);
+
+export const subTargetType = pgEnum("sub_target_type", ["model", "provider"]);
+
+export const subChannel = pgEnum("sub_channel", ["email", "telegram"]);
+
+export const subStatus = pgEnum("sub_status", [
+  "pending",
+  "active",
+  "unsubscribed",
+]);
+
+export const notificationStatus = pgEnum("notification_status", [
+  "queued",
+  "delivered",
+  "failed",
+  "skipped",
+]);
+
 const uuidPk = () => uuid("id").primaryKey().defaultRandom();
 
 const now = () =>
@@ -451,6 +478,9 @@ export const ingestionItems = pgTable(
     toolId: uuid("tool_id").references(() => tools.id, {
       onDelete: "set null",
     }),
+    modelId: uuid("model_id").references(() => models.id, {
+      onDelete: "set null",
+    }),
     error: text("error"),
     createdAt: now(),
     updatedAt: updatedNow(),
@@ -599,4 +629,223 @@ export const analyticsEvents = pgTable(
     createdAt: now(),
   }),
   (t) => [index("analytics_events_idx").on(t.event, t.createdAt)],
+);
+
+// ---------------------------------------------------------------------------
+// Model catalog: providers, models, monitored sources and update history.
+// Models are a data product: every factual field is source-backed and unknown
+// facts are stored as NULL, never invented.
+// ---------------------------------------------------------------------------
+
+export const modelProviders = pgTable(
+  "model_providers",
+  () => ({
+    id: uuidPk(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    websiteUrl: text("website_url"),
+    createdAt: now(),
+    updatedAt: updatedNow(),
+  }),
+  (t) => [uniqueIndex("model_providers_slug_idx").on(t.slug)],
+);
+
+export const models = pgTable(
+  "models",
+  () => ({
+    id: uuidPk(),
+    providerId: uuid("provider_id").references(() => modelProviders.id, {
+      onDelete: "set null",
+    }),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    modelIdentifier: text("model_identifier").notNull().default(""),
+    releaseDate: date("release_date", { mode: "string" }),
+    currentVersion: text("current_version"),
+    isDownloadable: boolean("is_downloadable").notNull().default(false),
+    contextWindow: integer("context_window"),
+    inputPricePer1M: numeric("input_price_per_1m", {
+      precision: 14,
+      scale: 6,
+    }),
+    outputPricePer1M: numeric("output_price_per_1m", {
+      precision: 14,
+      scale: 6,
+    }),
+    pricingNotes: text("pricing_notes"),
+    modalities: jsonb("modalities").$type<Array<string>>().notNull().default([]),
+    websiteUrl: text("website_url"),
+    descriptionAr: text("description_ar").notNull().default(""),
+    descriptionEn: text("description_en").notNull().default(""),
+    status: contentStatus("status").notNull().default("draft"),
+    publishedAt: timestamp("published_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    createdAt: now(),
+    updatedAt: updatedNow(),
+  }),
+  (t) => [
+    uniqueIndex("models_slug_idx").on(t.slug),
+    index("models_provider_idx").on(t.providerId),
+    index("models_status_idx")
+      .on(t.status)
+      .where(sql`${t.status} = 'published'`),
+    index("models_release_idx").on(t.releaseDate),
+    index("models_updated_idx").on(t.updatedAt),
+  ],
+);
+
+export const modelSources = pgTable(
+  "model_sources",
+  () => ({
+    id: uuidPk(),
+    modelId: uuid("model_id")
+      .notNull()
+      .references(() => models.id, { onDelete: "cascade" }),
+    sourceId: uuid("source_id")
+      .notNull()
+      .references(() => sources.id, { onDelete: "cascade" }),
+    sourceItemId: text("source_item_id").notNull(),
+    rawData: jsonb("raw_data").$type<Record<string, unknown>>(),
+    normalizedData: jsonb("normalized_data").$type<Record<string, unknown>>(),
+    contentHash: text("content_hash"),
+    firstSeenAt: timestamp("first_seen_at", {
+      withTimezone: true,
+      mode: "date",
+    })
+      .notNull()
+      .defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  }),
+  (t) => [
+    uniqueIndex("model_sources_item_idx").on(t.sourceId, t.sourceItemId),
+    index("model_sources_model_idx").on(t.modelId),
+  ],
+);
+
+export const modelUpdates = pgTable(
+  "model_updates",
+  () => ({
+    id: uuidPk(),
+    modelId: uuid("model_id")
+      .notNull()
+      .references(() => models.id, { onDelete: "cascade" }),
+    kind: modelUpdateKind("kind").notNull(),
+    title: text("title").notNull(),
+    contentAr: text("content_ar").notNull().default(""),
+    contentEn: text("content_en").notNull().default(""),
+    sourceUrl: text("source_url"),
+    snapshot: jsonb("snapshot").$type<Record<string, unknown>>(),
+    status: contentStatus("status").notNull().default("draft"),
+    publishedAt: timestamp("published_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    createdAt: now(),
+    updatedAt: updatedNow(),
+  }),
+  (t) => [
+    index("model_updates_model_idx").on(t.modelId, t.publishedAt),
+    uniqueIndex("model_updates_source_url_idx")
+      .on(t.sourceUrl)
+      .where(sql`${t.sourceUrl} IS NOT NULL`),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Change alerts: anonymous email subscriptions + optional Telegram channel.
+// A subscription targets exactly one model or one provider (target_type +
+// target_id). `receiver` holds the email address (email channel) or the
+// Telegram chat id (telegram channel).
+// ---------------------------------------------------------------------------
+
+export const alertSubscriptions = pgTable(
+  "alert_subscriptions",
+  () => ({
+    id: uuidPk(),
+    receiver: text("receiver").notNull(),
+    channel: subChannel("channel").notNull().default("email"),
+    targetType: subTargetType("target_type").notNull(),
+    targetId: uuid("target_id").notNull(),
+    status: subStatus("status").notNull().default("pending"),
+    token: uuid("token").notNull().defaultRandom(),
+    verifiedAt: timestamp("verified_at", { withTimezone: true, mode: "date" }),
+    lastNotifiedAt: timestamp("last_notified_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    createdAt: now(),
+    updatedAt: updatedNow(),
+  }),
+  (t) => [
+    uniqueIndex("alert_subs_target_idx").on(
+      t.receiver,
+      t.channel,
+      t.targetType,
+      t.targetId,
+    ),
+    uniqueIndex("alert_subs_token_idx").on(t.token),
+    index("alert_subs_status_idx").on(t.channel, t.status),
+    index("alert_subs_target_id_idx").on(t.targetType, t.targetId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Notifications: one event per published model update, one log per (event,
+// subscription, channel) delivery attempt. The unique log key makes delivery
+// idempotent against duplicate dispatch calls.
+// ---------------------------------------------------------------------------
+
+export const notificationEvents = pgTable(
+  "notification_events",
+  () => ({
+    id: uuidPk(),
+    modelUpdateId: uuid("model_update_id")
+      .notNull()
+      .references(() => modelUpdates.id, { onDelete: "set null" }),
+    status: notificationStatus("status").notNull().default("queued"),
+    processedAt: timestamp("processed_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    error: text("error"),
+    createdAt: now(),
+  }),
+  (t) => [
+    uniqueIndex("notification_events_update_idx").on(t.modelUpdateId),
+    index("notification_events_status_idx").on(t.status, t.createdAt),
+  ],
+);
+
+export const notificationLogs = pgTable(
+  "notification_logs",
+  () => ({
+    id: uuidPk(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => notificationEvents.id, { onDelete: "cascade" }),
+    subscriptionId: uuid("subscription_id").references(
+      () => alertSubscriptions.id,
+      { onDelete: "set null" },
+    ),
+    channel: subChannel("channel").notNull(),
+    status: notificationStatus("status").notNull().default("delivered"),
+    error: text("error"),
+    createdAt: now(),
+    deliveredAt: timestamp("delivered_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+  }),
+  (t) => [
+    uniqueIndex("notification_logs_event_sub_idx").on(
+      t.eventId,
+      t.subscriptionId,
+      t.channel,
+    ),
+    index("notification_logs_sub_idx").on(t.subscriptionId, t.status),
+  ],
 );

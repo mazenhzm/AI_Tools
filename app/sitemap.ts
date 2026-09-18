@@ -4,6 +4,7 @@ import {
   listPublicCollectionSlugs,
   listPublicToolSlugs,
 } from "@/lib/db/queries/public";
+import { listPublicModelSlugs } from "@/lib/db/queries/models";
 import { absoluteUrl } from "@/lib/seo/site";
 
 export const revalidate = 3600;
@@ -11,6 +12,7 @@ export const revalidate = 3600;
 const STATIC_ROUTES: MetadataRoute.Sitemap = [
   { url: absoluteUrl("/"), changeFrequency: "daily", priority: 1 },
   { url: absoluteUrl("/tools"), changeFrequency: "daily", priority: 0.9 },
+  { url: absoluteUrl("/models"), changeFrequency: "daily", priority: 0.9 },
   { url: absoluteUrl("/categories"), changeFrequency: "weekly", priority: 0.7 },
   { url: absoluteUrl("/collections"), changeFrequency: "weekly", priority: 0.7 },
   { url: absoluteUrl("/about"), changeFrequency: "monthly", priority: 0.3 },
@@ -21,10 +23,11 @@ const STATIC_ROUTES: MetadataRoute.Sitemap = [
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
-    const [tools, categories, collections] = await Promise.all([
+    const [tools, categories, collections, models] = await Promise.all([
       listPublicToolSlugs(),
       listPublicCategorySlugs(),
       listPublicCollectionSlugs(),
+      listPublicModelSlugs(),
     ]);
 
     return [
@@ -42,6 +45,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       })),
       ...tools.map((row) => ({
         url: absoluteUrl(`/tools/${row.slug}`),
+        lastModified: row.updatedAt,
+        changeFrequency: "weekly" as const,
+        priority: 0.8,
+      })),
+      ...models.map((row) => ({
+        url: absoluteUrl(`/models/${row.slug}`),
         lastModified: row.updatedAt,
         changeFrequency: "weekly" as const,
         priority: 0.8,

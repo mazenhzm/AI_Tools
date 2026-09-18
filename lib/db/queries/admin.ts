@@ -1,4 +1,4 @@
-import { and, count, desc, eq, ilike, or } from "drizzle-orm";
+import { and, count, desc, eq, ilike, or, sql } from "drizzle-orm";
 import type { Db } from "@/lib/db/db";
 import { db as defaultDb } from "@/lib/db/db";
 import * as s from "@/lib/db/schema";
@@ -171,6 +171,9 @@ export interface DashboardStats {
   totalRuns: number;
   lastRunAt: Date | null;
   failedRuns: number;
+  totalModels: number;
+  totalSubscriptions: number;
+  totalNotificationEvents: number;
 }
 
 export async function adminDashboardStats(
@@ -212,6 +215,14 @@ export async function adminDashboardStats(
     .orderBy(desc(s.ingestionRuns.startedAt))
     .limit(1);
 
+  const [modelCount] = await database.select({ value: count() }).from(s.models);
+  const [subscriptionCount] = await database
+    .select({ value: count() })
+    .from(s.alertSubscriptions);
+  const [eventCount] = await database
+    .select({ value: count() })
+    .from(s.notificationEvents);
+
   return {
     totalTools,
     byStatus,
@@ -220,6 +231,9 @@ export async function adminDashboardStats(
     totalRuns: Number(runCount?.value ?? 0),
     lastRunAt: lastRun?.startedAt ?? null,
     failedRuns: Number(failed?.value ?? 0),
+    totalModels: Number(modelCount?.value ?? 0),
+    totalSubscriptions: Number(subscriptionCount?.value ?? 0),
+    totalNotificationEvents: Number(eventCount?.value ?? 0),
   };
 }
 
@@ -259,4 +273,247 @@ export async function listIngestionRuns(
     .from(s.ingestionRuns);
 
   return { items, total: Number(totalRow?.value ?? 0), page, pageSize };
+}
+
+// ---------------------------------------------------------------------------
+// Models (admin)
+// ---------------------------------------------------------------------------
+
+export interface ListModelsArgs {
+  status?: string;
+  q?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export async function listModelsForAdmin(
+  args: ListModelsArgs = {},
+  database: Db = defaultDb,
+): Promise<{
+  items: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    providerName: string | null;
+    status: ContentStatusValue;
+    isDownloadable: boolean;
+    contextWindow: number | null;
+    updatedAt: Date;
+    updatedCount: number;
+  }>;
+  total: number;
+  page: number;
+  pageSize: number;
+  status?: ContentStatusValue;
+  q?: string;
+}> {
+  const page = Math.max(1, args.page ?? 1);
+  const pageSize = Math.min(100, Math.max(5, args.pageSize ?? 20));
+
+  const filters = [];
+  const status = isContentStatus(args.status) ? args.status : undefined;
+  if (status) filters.push(eq(s.models.status, status));
+  const q = args.q?.trim();
+  if (q) {
+    filters.push(
+      or(ilike(s.models.name, `%${q}%`), ilike(s.models.slug, `%${q}%`)),
+    );
+  }
+  const where = filters.length > 0 ? and(...filters) : undefined;
+
+  const items = await database
+    .select({
+      id: s.models.id,
+      name: s.models.name,
+      slug: s.models.slug,
+      providerName: s.modelProviders.name,
+      status: s.models.status,
+      isDownloadable: s.models.isDownloadable,
+      contextWindow: s.models.contextWindow,
+      updatedAt: s.models.updatedAt,
+      updatedCount: count(s.modelUpdates.id),
+    })
+    .from(s.models)
+    .leftJoin(s.modelProviders, eq(s.modelProviders.id, s.models.providerId))
+    .leftJoin(s.modelUpdates, eq(s.modelUpdates.modelId, s.models.id))
+    .where(where)
+    .groupBy(s.models.id, s.modelProviders.name)
+    .orderBy(desc(s.models.updatedAt))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+
+  const [totalRow] = await database
+    .select({ value: count() })
+    .from(s.models)
+    .where(where);
+
+  return {
+    items,
+    total: Number(totalRow?.value ?? 0),
+    page,
+    pageSize,
+    status,
+    q,
+  };
+}
+
+export async function getModelForAdmin(id: string, database: Db = defaultDb) {
+  const [model] = await database
+    .select()
+    .from(s.models)
+    .where(eq(s.models.id, id))
+    .limit(1);
+  if (!model) return null;
+
+  const provider = model.providerId
+    ? ((await database
+        .select()
+        .from(s.modelProviders)
+        .where(eq(s.modelProviders.id, model.providerId))
+        .limit(1))[0] ?? null)
+    : null;
+
+  const sources = await database
+    .select()
+    .from(s.modelSources)
+    .where(eq(s.modelSources.modelId, id))
+    .orderBy(desc(s.modelSources.lastSeenAt));
+
+  const updates = await database
+    .select()
+    .from(s.modelUpdates)
+    .where(eq(s.modelUpdates.modelId, id))
+    .orderBy(desc(s.modelUpdates.createdAt))
+    .limit(20);
+
+  const revisions = await database
+    .select({
+      id: s.contentRevisions.id,
+      field: s.contentRevisions.field,
+      reason: s.contentRevisions.reason,
+      createdAt: s.contentRevisions.createdAt,
+    })
+    .from(s.contentRevisions)
+    .where(eq(s.contentRevisions.entityId, id))
+    .orderBy(desc(s.contentRevisions.createdAt))
+    .limit(10);
+
+  const subscriptions = await database
+    .select()
+    .from(s.alertSubscriptions)
+    .where(eq(s.alertSubscriptions.targetId, id))
+    .orderBy(desc(s.alertSubscriptions.createdAt))
+    .limit(20);
+
+  return { model, provider, sources, updates, revisions, subscriptions };
+}
+
+// ---------------------------------------------------------------------------
+// Change-alert subscriptions + notification events (admin)
+// ---------------------------------------------------------------------------
+
+export async function listSubscriptionsForAdmin(
+  args: { page?: number; pageSize?: number; channel?: string; status?: string } = {},
+  database: Db = defaultDb,
+) {
+  const page = Math.max(1, args.page ?? 1);
+  const pageSize = Math.min(100, Math.max(5, args.pageSize ?? 20));
+
+  const filters: Parameters<typeof and>[0][] = [];
+  if (args.channel === "email" || args.channel === "telegram") {
+    filters.push(eq(s.alertSubscriptions.channel, args.channel));
+  }
+  const subStatusValues = new Set<string>(s.subStatus.enumValues);
+  if (args.status && subStatusValues.has(args.status)) {
+    filters.push(
+      eq(s.alertSubscriptions.status, args.status as typeof s.subStatus.enumValues[number]),
+    );
+  }
+  const where = filters.length > 0 ? and(...filters) : undefined;
+
+  const items = await database
+    .select({
+      id: s.alertSubscriptions.id,
+      receiver: s.alertSubscriptions.receiver,
+      channel: s.alertSubscriptions.channel,
+      targetType: s.alertSubscriptions.targetType,
+      targetId: s.alertSubscriptions.targetId,
+      targetName: sql<string | null>`coalesce(${s.models.name}, ${s.modelProviders.name})`,
+      status: s.alertSubscriptions.status,
+      verifiedAt: s.alertSubscriptions.verifiedAt,
+      lastNotifiedAt: s.alertSubscriptions.lastNotifiedAt,
+      createdAt: s.alertSubscriptions.createdAt,
+      token: s.alertSubscriptions.token,
+    })
+    .from(s.alertSubscriptions)
+    .leftJoin(s.models, eq(s.models.id, s.alertSubscriptions.targetId))
+    .leftJoin(
+      s.modelProviders,
+      eq(s.modelProviders.id, s.alertSubscriptions.targetId),
+    )
+    .where(where)
+    .orderBy(desc(s.alertSubscriptions.createdAt))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+
+  const [totalRow] = await database
+    .select({ value: count() })
+    .from(s.alertSubscriptions)
+    .where(where);
+
+  return { items, total: Number(totalRow?.value ?? 0), page, pageSize };
+}
+
+export async function listNotificationEventsForAdmin(
+  args: { page?: number; pageSize?: number } = {},
+  database: Db = defaultDb,
+) {
+  const page = Math.max(1, args.page ?? 1);
+  const pageSize = Math.min(100, Math.max(5, args.pageSize ?? 20));
+
+  const events = await database
+    .select({
+      id: s.notificationEvents.id,
+      status: s.notificationEvents.status,
+      modelUpdateId: s.notificationEvents.modelUpdateId,
+      modelName: s.models.name,
+      error: s.notificationEvents.error,
+      createdAt: s.notificationEvents.createdAt,
+      processedAt: s.notificationEvents.processedAt,
+      logCount: count(s.notificationLogs.id),
+      deliveredCount: sql<number>`count(*) FILTER (WHERE ${s.notificationLogs.status} = 'delivered')`,
+      failedCount: sql<number>`count(*) FILTER (WHERE ${s.notificationLogs.status} = 'failed')`,
+    })
+    .from(s.notificationEvents)
+    .leftJoin(s.modelUpdates, eq(s.modelUpdates.id, s.notificationEvents.modelUpdateId))
+    .leftJoin(s.models, eq(s.models.id, s.modelUpdates.modelId))
+    .leftJoin(s.notificationLogs, eq(s.notificationLogs.eventId, s.notificationEvents.id))
+    .groupBy(s.notificationEvents.id, s.models.name)
+    .orderBy(desc(s.notificationEvents.createdAt))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+
+  const [totalRow] = await database
+    .select({ value: count() })
+    .from(s.notificationEvents);
+
+  const logs = await database
+    .select({
+      id: s.notificationLogs.id,
+      eventId: s.notificationLogs.eventId,
+      channel: s.notificationLogs.channel,
+      receiver: s.alertSubscriptions.receiver,
+      status: s.notificationLogs.status,
+      error: s.notificationLogs.error,
+      createdAt: s.notificationLogs.createdAt,
+    })
+    .from(s.notificationLogs)
+    .leftJoin(
+      s.alertSubscriptions,
+      eq(s.alertSubscriptions.id, s.notificationLogs.subscriptionId),
+    )
+    .orderBy(desc(s.notificationLogs.createdAt))
+    .limit(50);
+
+  return { events, logs, total: Number(totalRow?.value ?? 0), page, pageSize };
 }

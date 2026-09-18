@@ -73,6 +73,20 @@ export const env = {
   pgContainer: process.env.PG_CONTAINER ?? "aidiscovery-pg",
   backupDir: process.env.BACKUP_DIR ?? "backups",
   backupRetention: Number(process.env.BACKUP_RETENTION ?? 7),
+
+  // --- Change alerts / notifications ---
+  notificationsEnabled: process.env.NOTIFICATIONS_ENABLED !== "false",
+  emailFrom: process.env.EMAIL_FROM ?? "",
+  smtpHost: process.env.EMAIL_SMTP_HOST ?? "",
+  smtpPort: Number(process.env.EMAIL_SMTP_PORT ?? 587),
+  smtpUser: process.env.EMAIL_SMTP_USER ?? "",
+  smtpPassword: process.env.EMAIL_SMTP_PASSWORD ?? "",
+  smtpSecure: process.env.EMAIL_SMTP_SECURE === "1" || process.env.EMAIL_SMTP_SECURE === "true",
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
+  telegramBotUsername: process.env.TELEGRAM_BOT_USERNAME ?? "",
+  subscriptionsMaxPerReceiver: Number(
+    process.env.SUBSCRIPTIONS_MAX_PER_RECEIVER ?? 25,
+  ),
 };
 
 /** Guard used by scripts that must never run against data they shouldn't touch. */

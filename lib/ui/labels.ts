@@ -50,6 +50,38 @@ const CAMPAIGN_STATUS_AR: Record<string, string> = {
   ended: "منتهية",
 };
 
+export const MODEL_UPDATE_KIND_AR: Record<string, string> = {
+  pricing: "تغيير في التسعير",
+  context_window: "تغيير في نافذة السياق",
+  availability: "تغيير في التوفر",
+  modality: "تغيير في أنماط الوسائط",
+  new_version: "إصدار جديد",
+  metadata: "تغيير في البيانات التعريفية",
+};
+
+export const SUB_CHANNEL_AR: Record<string, string> = {
+  email: "بريد إلكتروني",
+  telegram: "تيليغرام",
+};
+
+export const SUB_TARGET_TYPE_AR: Record<string, string> = {
+  model: "نموذج",
+  provider: "موفر / شركة",
+};
+
+export const SUB_STATUS_AR: Record<string, string> = {
+  pending: "بانتظار التحقق",
+  active: "نشط",
+  unsubscribed: "ملغى",
+};
+
+export const NOTIFICATION_STATUS_AR: Record<string, string> = {
+  queued: "قيد الإرسال",
+  delivered: "تم الإرسال",
+  failed: "فشل الإرسال",
+  skipped: "تم التخطي",
+};
+
 export function toolStatusLabel(status: string): string {
   return TOOL_STATUS_AR[status] ?? status;
 }
@@ -73,6 +105,30 @@ export function contentStatusLabel(status: string): string {
 export function campaignStatusLabel(status: string): string {
   return CAMPAIGN_STATUS_AR[status] ?? status;
 }
+
+export function modelUpdateKindLabel(kind: string): string {
+  return MODEL_UPDATE_KIND_AR[kind] ?? kind ?? "غير معروف";
+}
+
+export function subChannelLabel(channel: string): string {
+  return SUB_CHANNEL_AR[channel] ?? channel;
+}
+
+export function subTargetTypeLabel(targetType: string): string {
+  return SUB_TARGET_TYPE_AR[targetType] ?? targetType;
+}
+
+export function subStatusLabel(status: string): string {
+  return SUB_STATUS_AR[status] ?? status;
+}
+
+export function notificationStatusLabel(status: string): string {
+  return NOTIFICATION_STATUS_AR[status] ?? status;
+}
+
+export const MODEL_UPDATE_KIND_VALUES = Object.keys(MODEL_UPDATE_KIND_AR);
+export const SUB_CHANNEL_VALUES = Object.keys(SUB_CHANNEL_AR);
+export const SUB_TARGET_TYPE_VALUES = Object.keys(SUB_TARGET_TYPE_AR);
 
 export const CONTENT_STATUS_VALUES = Object.keys(CONTENT_STATUS_AR);
 export const CAMPAIGN_STATUS_VALUES = Object.keys(CAMPAIGN_STATUS_AR);

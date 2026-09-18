@@ -6,6 +6,7 @@ import { listPublicCategories } from "@/lib/db/queries/public";
 const NAV = [
   { href: "/", label: "الرئيسية" },
   { href: "/tools", label: "الأدوات" },
+  { href: "/models", label: "النماذج" },
   { href: "/categories", label: "التصنيفات" },
   { href: "/collections", label: "القوائم" },
 ];

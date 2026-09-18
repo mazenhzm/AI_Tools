@@ -98,6 +98,44 @@ export function buildToolJsonLd(input: ToolJsonLdInput): JsonLdNode {
   });
 }
 
+export interface ModelJsonLdInput {
+  name: string;
+  description: string;
+  url: string;
+  providerName?: string | null;
+  isDownloadable: boolean;
+  publishedAt?: Date | null;
+  updatedAt?: Date | null;
+}
+
+/**
+ * Structured data for a published AI model card. Downloadable models are
+ * SoftwareApplication; the rest are Product. Only real stored facts are
+ * emitted — never ratings, usage or ad-hoc offers.
+ */
+export function buildModelJsonLd(input: ModelJsonLdInput): JsonLdNode {
+  const brand = input.providerName
+    ? { "@type": "Organization", name: input.providerName }
+    : undefined;
+
+  return compact({
+    "@context": "https://schema.org",
+    "@type": input.isDownloadable ? "SoftwareApplication" : "Product",
+    name: input.name,
+    description: input.description,
+    url: input.url,
+    inLanguage: "ar",
+    datePublished: iso(input.publishedAt),
+    dateModified: iso(input.updatedAt),
+    brand,
+    publisher: {
+      "@type": "Organization",
+      name: SITE_NAME_AR,
+      url: absoluteUrl("/"),
+    },
+  });
+}
+
 export function buildBreadcrumbJsonLd(items: BreadcrumbItem[]): JsonLdNode {
   return {
     "@context": "https://schema.org",

@@ -122,6 +122,52 @@ async function ensureSource(v: {
   return row;
 }
 
+async function ensureProvider(v: { name: string; slug: string }) {
+  const [existing] = await db
+    .select()
+    .from(s.modelProviders)
+    .where(eq(s.modelProviders.slug, v.slug))
+    .limit(1);
+  if (existing) return existing;
+  const [row] = await db
+    .insert(s.modelProviders)
+    .values(v)
+    .returning();
+  return row;
+}
+
+async function ensureModel(v: {
+  name: string;
+  slug: string;
+  providerId: string | null;
+  modelIdentifier: string;
+  contextWindow: number | null;
+  isDownloadable: boolean;
+  inputPricePer1M: string | null;
+  outputPricePer1M: string | null;
+  currentVersion: string | null;
+  websiteUrl: string | null;
+  modalities: string[];
+  descriptionAr: string;
+}) {
+  const [existing] = await db
+    .select()
+    .from(s.models)
+    .where(eq(s.models.slug, v.slug))
+    .limit(1);
+  if (existing) return existing;
+  const [row] = await db
+    .insert(s.models)
+    .values({
+      ...v,
+      status: "published",
+      publishedAt: new Date(),
+      descriptionEn: `${SAMPLE_EN} Placeholder model entry.`,
+    })
+    .returning();
+  return row;
+}
+
 async function linkToolTag(toolId: string, tagId: string) {
   await db.insert(s.toolTags).values({ toolId, tagId }).onConflictDoNothing();
 }
@@ -346,8 +392,144 @@ async function main() {
     )
     .onConflictDoNothing();
 
+  // -------------------------------------------------------------------------
+  // Model monitoring demo data. Clearly marked as sample/placeholder. The
+  // fixture facts MATCH the seeded facts exactly so a worker run reports
+  // "duplicate" (no fabricated change); one extra fixture entry ("Delta")
+  // demonstrates the "created" path.
+  // -------------------------------------------------------------------------
+  const providers = await Promise.all([
+    ensureProvider({ name: "[Sample] Acme AI", slug: "sample-acme-ai" }),
+    ensureProvider({ name: "[Sample] DeepNova", slug: "sample-deepnova" }),
+  ]);
+
+  const models = await Promise.all([
+    ensureModel({
+      name: "[Sample] Alpha Chat",
+      slug: "sample-acme-ai-sample-alpha-chat",
+      providerId: providers[0].id,
+      modelIdentifier: "sample-alpha-chat",
+      contextWindow: 128000,
+      isDownloadable: false,
+      inputPricePer1M: "5.00",
+      outputPricePer1M: "15.00",
+      currentVersion: "1.0",
+      websiteUrl: "https://example.com/alpha",
+      modalities: ["text"],
+      descriptionAr: `${SAMPLE_AR} نموذج محادثة تجريبي للعرض.`,
+    }),
+    ensureModel({
+      name: "[Sample] Beta Mini",
+      slug: "sample-acme-ai-sample-beta-mini",
+      providerId: providers[0].id,
+      modelIdentifier: "sample-beta-mini",
+      contextWindow: 8000,
+      isDownloadable: false,
+      inputPricePer1M: "1.00",
+      outputPricePer1M: "2.00",
+      currentVersion: "1.2",
+      websiteUrl: "https://example.com/beta",
+      modalities: ["text"],
+      descriptionAr: `${SAMPLE_AR} نموذج مصغّر تجريبي للعرض.`,
+    }),
+    ensureModel({
+      name: "[Sample] Gamma Embeddings",
+      slug: "sample-deepnova-sample-gamma-embeddings",
+      providerId: providers[1].id,
+      modelIdentifier: "sample-gamma-embeddings",
+      contextWindow: 16384,
+      isDownloadable: true,
+      inputPricePer1M: null,
+      outputPricePer1M: null,
+      currentVersion: "0.9",
+      websiteUrl: "https://example.com/gamma",
+      modalities: ["text"],
+      descriptionAr: `${SAMPLE_AR} نموذج تضمين تجريبي قابل للتنزيل.`,
+    }),
+  ]);
+
+  const modelFixtureInline = JSON.stringify([
+    {
+      sourceItemId: "fixture-alpha-chat",
+      name: "[Sample] Alpha Chat",
+      modelId: "sample-alpha-chat",
+      provider: "[Sample] Acme AI",
+      currentVersion: "1.0",
+      isDownloadable: false,
+      contextWindow: 128000,
+      inputPricePer1M: 5.0,
+      outputPricePer1M: 15.0,
+      modalities: ["text"],
+      websiteUrl: "https://example.com/alpha",
+      sourceUrl: "https://example.com/alpha/changelog",
+      summary: `${SAMPLE_AR} مساعد محادثة تجريبي.`,
+      content: `${SAMPLE_AR} نموذج محادثة تجريبي للعرض فقط.`,
+      raw: {},
+    },
+    {
+      sourceItemId: "fixture-beta-mini",
+      name: "[Sample] Beta Mini",
+      modelId: "sample-beta-mini",
+      provider: "[Sample] Acme AI",
+      currentVersion: "1.2",
+      isDownloadable: false,
+      contextWindow: 8000,
+      inputPricePer1M: 1.0,
+      outputPricePer1M: 2.0,
+      modalities: ["text"],
+      websiteUrl: "https://example.com/beta",
+      sourceUrl: "https://example.com/beta/changelog",
+      summary: `${SAMPLE_AR} نموذج مصغّر تجريبي.`,
+      content: `${SAMPLE_AR} نموذج مصغّر تجريبي للعرض فقط.`,
+      raw: {},
+    },
+    {
+      sourceItemId: "fixture-gamma-embeddings",
+      name: "[Sample] Gamma Embeddings",
+      modelId: "sample-gamma-embeddings",
+      provider: "[Sample] DeepNova",
+      currentVersion: "0.9",
+      isDownloadable: true,
+      contextWindow: 16384,
+      inputPricePer1M: null,
+      outputPricePer1M: null,
+      modalities: ["text"],
+      websiteUrl: "https://example.com/gamma",
+      sourceUrl: "https://example.com/gamma/changelog",
+      summary: `${SAMPLE_AR} نموذج تضمين تجريبي.`,
+      content: `${SAMPLE_AR} نموذج تضمين تجريبي للعرض فقط.`,
+      raw: {},
+    },
+    {
+      sourceItemId: "fixture-delta-vision",
+      name: "[Sample] Delta Vision",
+      modelId: "sample-delta-vision",
+      provider: "[Sample] DeepNova",
+      currentVersion: "0.1",
+      isDownloadable: false,
+      contextWindow: 4096,
+      inputPricePer1M: null,
+      outputPricePer1M: null,
+      modalities: ["text", "image"],
+      websiteUrl: "https://example.com/delta",
+      sourceUrl: "https://example.com/delta/changelog",
+      summary: `${SAMPLE_AR} نموذج رؤية تجريبي.`,
+      content: `${SAMPLE_AR} نموذج رؤية تجريبي للعرض فقط.`,
+      raw: {},
+    },
+  ]);
+
+  const modelSource = await ensureSource({
+    name: "[نموذج] مصدر نماذج تجريبي (offline)",
+    slug: "sample-models-fixture",
+    type: "manual",
+    adapterKey: "model:fixture",
+    config: { fixtureInline: modelFixtureInline },
+    active: true,
+  });
+
   console.log(
-    `[seed] ok — categories=${categories.length} tags=${tags.length} features=${features.length} tools=${tools.length} sources=${sources.length} collection=1`,
+    `[seed] ok — categories=${categories.length} tags=${tags.length} features=${features.length} tools=${tools.length} sources=${sources.length} collection=1 providers=${providers.length} models=${models.length} modelSource=${modelSource.slug}`,
   );
   process.exit(0);
 }
