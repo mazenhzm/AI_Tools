@@ -3,6 +3,7 @@ import { getPool, db } from "@/lib/db/db";
 import { env } from "@/lib/env";
 import * as s from "@/lib/db/schema";
 import { runModelSource, type RunModelSourceResult } from "../ingestion/models/pipeline";
+import { sleepMs } from "../ingestion/timeout";
 
 type LogLevel = "info" | "warn" | "error";
 
@@ -118,8 +119,11 @@ async function main() {
     if (modelSources.length === 0) {
       log("warn", "no active model sources to run");
     }
-    let failed = false;
-    for (const source of modelSources) {
+let failed = false;
+    for (const [index, source] of modelSources.entries()) {
+      if (index > 0 && env.ingestionRateLimitDelayMs > 0) {
+        await sleepMs(env.ingestionRateLimitDelayMs);
+      }
       const result = await runModelSource({
         sourceId: source.id,
         maxItems: Number.isFinite(args.maxItems) ? args.maxItems : undefined,

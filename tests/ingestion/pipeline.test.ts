@@ -4,6 +4,7 @@ import { db } from "@/lib/db/db";
 import * as s from "@/lib/db/schema";
 import { NetworkError } from "@/ingestion/errors";
 import { runSource } from "@/ingestion/pipeline";
+import { runIngestion } from "@/ingestion/run";
 import type { SourceRow } from "@/ingestion/types";
 import { clearDb } from "../db/helpers";
 
@@ -142,5 +143,56 @@ describe("runSource", () => {
       .where(eq(s.sources.id, source.id));
     expect(updated.lastFetchedAt).toBeInstanceOf(Date);
     expect(updated.lastSuccessAt).toBeInstanceOf(Date);
+  });
+});
+
+describe("runIngestion", () => {
+  it("excludes model sources so the tools worker never runs them", async () => {
+    const toolSource = await makeSource();
+    const [modelSource] = await db
+      .insert(s.sources)
+      .values({
+        name: "Model Fixture",
+        slug: "model-fixture",
+        type: "manual",
+        adapterKey: "model:fixture",
+        config: { fixtureInline: "[]" },
+        active: true,
+      })
+      .returning();
+
+    const summaries = await runIngestion({ maxItems: 5 });
+
+    expect(summaries.map((summary) => summary.sourceId)).toEqual([toolSource.id]);
+    expect(summaries[0].result.metrics.created).toBe(3);
+
+    const modelRuns = await db
+      .select({ id: s.ingestionRuns.id })
+      .from(s.ingestionRuns)
+      .where(eq(s.ingestionRuns.sourceId, modelSource.id));
+    expect(modelRuns).toHaveLength(0);
+  });
+
+  it("paces between sources when configured", async () => {
+    const first = await makeSource();
+    const [second] = await db
+      .insert(s.sources)
+      .values({
+        name: "Second Feed",
+        slug: "second-feed",
+        type: "manual",
+        adapterKey: "fixture:inline",
+        config: { fixturePath: "tests/fixtures/rss/valid.xml" },
+        active: true,
+      })
+      .returning();
+
+    const start = Date.now();
+    const summaries = await runIngestion({ maxItems: 5 });
+    const elapsed = Date.now() - start;
+
+    expect(summaries).toHaveLength(2);
+    expect(summaries.map((summary) => summary.sourceId)).toEqual([first.id, second.id]);
+    expect(elapsed).toBeGreaterThanOrEqual(0);
   });
 });

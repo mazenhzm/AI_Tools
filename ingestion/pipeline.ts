@@ -8,6 +8,7 @@ import { findExistingTool } from "./dedupe";
 import { classifyError } from "./errors";
 import { normalizeItem } from "./normalize";
 import { resolveAdapter } from "./registry";
+import { resolveTimeoutMs } from "./timeout";
 import { recordToolUpdate } from "./update-monitor";
 import type {
   NormalizedItem,
@@ -331,8 +332,7 @@ export async function runSource(
   const adapter = resolveAdapter(source.adapterKey);
   const timeoutMs =
     options.timeoutMs ??
-    Number((source.config as Record<string, unknown> | null)?.timeoutMs) ??
-    30000;
+    resolveTimeoutMs((source.config as Record<string, unknown> | null)?.timeoutMs);
   const httpGet = options.httpGet ?? createHttpGet(timeoutMs);
   const metrics = emptyMetrics();
   const results: PipelineItemResult[] = [];

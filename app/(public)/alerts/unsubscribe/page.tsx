@@ -1,8 +1,16 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { unsubscribeByToken } from "@/lib/notifications/service";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = buildPageMetadata({
+  title: "إلغاء الاشتراك",
+  path: "/alerts/unsubscribe",
+  noIndex: true,
+});
 
 export default async function UnsubscribeAlertPage({
   searchParams,

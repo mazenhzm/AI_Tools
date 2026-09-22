@@ -4,6 +4,14 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db/db";
 import * as s from "@/lib/db/schema";
 import { env } from "@/lib/env";
+import type { Metadata } from "next";
+import { buildPageMetadata } from "@/lib/seo/metadata";
+
+export const metadata: Metadata = buildPageMetadata({
+  title: "تم تأكيد الاشتراك",
+  path: "/alerts/subscribed",
+  noIndex: true,
+});
 
 export default async function SubscribedPage({
   searchParams,

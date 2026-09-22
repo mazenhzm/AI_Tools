@@ -1,7 +1,9 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db/db";
+import { env } from "@/lib/env";
 import * as s from "@/lib/db/schema";
 import { runSource, type EnrichFn, type RunSourceResult } from "./pipeline";
+import { sleepMs } from "./timeout";
 
 export interface SourceRunSummary {
   sourceId: string;
@@ -31,9 +33,18 @@ export async function runIngestion(
     : eq(s.sources.active, true);
 
   const sources = await db.select().from(s.sources).where(where);
+  // The tools pipeline only handles tool adapters. Model sources belong to the
+  // model worker (`worker-models`); resolving them here would fall back to the
+  // default RSS adapter and fail the whole run.
+  const toolSources = sources.filter(
+    (source) => !source.adapterKey.startsWith("model:"),
+  );
   const summaries: SourceRunSummary[] = [];
 
-  for (const source of sources) {
+  for (const [index, source] of toolSources.entries()) {
+    if (index > 0 && env.ingestionRateLimitDelayMs > 0) {
+      await sleepMs(env.ingestionRateLimitDelayMs);
+    }
     const result = await runSource({
       sourceId: source.id,
       maxItems: options.maxItems,

@@ -1,8 +1,16 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { verifyAlertSubscription } from "@/lib/notifications/service";
+import { buildPageMetadata } from "@/lib/seo/metadata";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = buildPageMetadata({
+  title: "تحقق من اشتراك التنبيهات",
+  path: "/alerts/verify",
+  noIndex: true,
+});
 
 export default async function VerifyAlertPage({
   searchParams,

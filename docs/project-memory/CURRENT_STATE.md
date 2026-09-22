@@ -1,12 +1,12 @@
 # CURRENT STATE
 
 ```text
-CURRENT PHASE:          10 — Production readiness (complete; project MVP finished)
-CURRENT STATUS:         Production-ready: update monitoring + admin review, worker observability, run metrics, verified backups and full E2E/hardening green (168 tests, build clean, smoke 18/18)
-LAST VERIFIED:          2026-09-17 (typecheck, lint, vitest 168/168, next build, live production start + smoke, worker run, /admin/runs, admin update-review flow, public pages, auth guard)
+CURRENT PHASE:          Production readiness execution protocol (P0–P11): P0–P3 + P7–P9 verified; P4 BLOCKED-EXTERNAL (Gemini key); P5 needs product-owner decision; P6 BLOCKED-EXTERNAL (SMTP/telegram)
+CURRENT STATUS:         Real trusted model source (Hugging Face adapter) + ingestion resilience (retry/backoff/429/Retry-After, timeout fix, source pacing) + real scheduling verified (Windows Task Scheduler dispatched runs, logs + ingestion_runs rows) + SEO hardening (alert pages noindex) + security/backup/observability verified (277 tests, build clean, smoke 28/28, backup/restore drill with row parity)
+LAST VERIFIED:          2026-09-22 (typecheck, lint, vitest 277/277 on 37 files, next build, live production start + smoke 28/28, canonical/OG/robots/sitemap over HTTP, security headers + HSTS over HTTP, db:backup + scratch restore 26 tables with exact row parity, Task Scheduler LastTaskResult 0 for both workers, worker exit-signal subprocess tests)
 
 WORKING FEATURES:
-  - PostgreSQL schema (19 tables, 11 enums, FKs, partial/unique/GIN indexes) applied to dev + test DBs
+  - PostgreSQL schema (26 tables, 11 enums, FKs, partial/unique/GIN indexes) applied to dev + test DBs
   - Drizzle migration pipeline (generate + migrate) with pg_trgm extension bootstrap
   - Idempotent dev seeds: 4 categories, 5 tags, 5 features, 3 clearly-labeled sample tools (2 published for public-site verification), 1 published collection, 2 sources (1 active offline fixture)
   - Admin seeding from env (bcrypt hash, idempotent upsert)
@@ -27,6 +27,11 @@ WORKING FEATURES:
   - Admin update review: `getToolForAdmin` returns recent updates; `setUpdateStatus` service + thin `setUpdateStatusAction`; the tool detail page renders a "التحديثات المكتشفة" section with Arabic status labels and publish/reject/pending-review forms (state machine enforced in the service, not the UI)
   - Worker observability: `scripts/worker.ts` logs ISO timestamp + level events (with `--json` line mode) and a terminal `run_summary` (sources/fetched/created/updated/duplicates/invalid/errors/aiProcessed/aiFailed/durationMs), exiting non-zero if any source fails
   - Operability: `/admin/runs` shows the full per-run metrics grid; `npm run db:backup` dumps inside the container into `backups/` (refuses empty dumps, prunes to `BACKUP_RETENTION`); `README.md` + `docs/project-memory/OPERATIONS.md` document processes, worker scheduling, logging, backup/restore and the pre-launch checklist
+  - Real model source (P1): `ingestion/adapters/hf-models.ts` (`model:huggingface`) — keyless Hugging Face API, downloads-sorted, private/gated/disabled filtered, modalities derived from pipeline_tag/tags, unknown pricing/contextWindow nulled; registered in `ingestion/models/registry.ts`; inactive dev source `hf-models-api`; real fetch verified once (8 drafts created, dev DB then reset to canonical)
+  - Ingestion resilience (P2): `ingestion/timeout.ts` (`resolveTimeoutMs`, `sleepMs`) kills the NaN-timeout bug in both pipelines; `ingestion/adapters/http.ts` `createHttpGet` retries with exponential backoff, honours 429 + Retry-After and retries only transient 5xx/network (no retry on 4xx); `INGESTION_RATE_LIMIT_DELAY_MS` now paces multi-source runs
+  - Real scheduling (P3): Windows Task Scheduler tasks `AIDiscovery-IngestionTools`/`AIDiscovery-IngestionModels` (daily 02:00, repeat 6h) dispatch successfully — real worker logs + `ingestion_runs` rows; registered with `AllowStartIfOnBatteries` (laptop hosts else stuck Queued) and interactive logon; `runIngestion` excludes `model:*` sources so the tools worker never fails on them
+  - SEO hardening (P7): tokenized `/alerts/{verify,subscribed,unsubscribe}` pages now emit explicit `noIndex` metadata; canonical + absolute OG verified over HTTP on `/` and `/tools`
+  - Worker alert signal (P9): `tests/ingestion/worker-exit.test.ts` spawns the real worker against the test DB and asserts exit 0 on success / exit 1 on failure
 
 PARTIALLY IMPLEMENTED:
   - lib/env.ts (config + test isolation + write guard) — functional, more keys added in later phases
@@ -43,7 +48,7 @@ NOT IMPLEMENTED:
   - in-repo scheduling (worker is run by external cron/Task Scheduler/K8s CronJob per OPERATIONS.md), analytics pipeline/aggregation, real ad/affiliate credentials, nonce-based CSP enforcement, browser-automation E2E
 
 KNOWN BUGS:
-  - none (168/168 tests passing)
+  - none (277/277 tests passing); the pre-fix tools-worker failure on model sources (P3) was detected by a scheduled run, fixed in `runIngestion`, and is now guarded by a test AND verified sensor
 
 KNOWN RISKS:
   - Gemini API key not supplied → worker runs ingestion-only and reports AI disabled (no fabrication)
@@ -56,19 +61,20 @@ KNOWN RISKS:
   - Dev seed contains a labelled demo sponsored campaign pointing at `example.com`; must not be seeded in production
   - The CSP is report-only until a nonce-based policy is implemented, so it currently only reports (no blocking) of violations
 
-LAST TEST RESULTS:       vitest 168/168 passed / 25 files (db + ingestion + ai + auth + actions + services + seo + monetization + security + ops + ui)
+LAST TEST RESULTS:       vitest 277/277 passed / 37 files (db + ingestion + models + ai + auth + actions + services + seo + monetization + security + ops + ui + notifications + worker-exit)
 LAST BUILD RESULT:       PASS — `next build` (Next.js 16.3.5, Turbopack) with zero warnings
-LAST DATABASE VERIFICATION:  PASS — 19 tables, all indexes incl. GIN trigram/tsvector, pg_trgm present; migration `0001` (`item_status` + `updated`) applied; backup dump restored into a scratch DB (19 tables, 5 tools)
-LAST INGESTION VERIFICATION: PASS — worker live run in `--json` mode: 2 fetched / 2 duplicates, `run_summary` emitted with timestamped events, exit 0; update-monitor tests cover change → draft update, idempotent repeat, unchanged baseline
+LAST DATABASE VERIFICATION:  PASS — 26 tables, 3 migrations, all indexes incl. GIN trigram/tsvector, pg_trgm present; backup dump restored into a scratch DB (26 tables, exact row parity: tools 5, models 4, sources 4, runs 8, categories 4, collections 1)
+LAST INGESTION VERIFICATION: PASS — worker run against aidiscovery_dev idempotent (duplicates on repeat); since P3 the tools worker runs tool sources only (never fails on `model:*`); hf adapter real fetch verified once (8 drafts, then dev DB reset); retry/backoff/429 timeouts covered by `tests/ingestion/http-retry.test.ts`
+LAST SCHEDULING VERIFICATION: PASS — Windows Task Scheduler `AIDiscovery-IngestionTools`/`AIDiscovery-IngestionModels` on-demand dispatch: `LastTaskResult=0`, real worker `--json` logs, `ingestion_runs` rows persisted; worker-exit subprocess tests guard exit 0/1
+LAST BACKUP VERIFICATION: PASS — `npm run db:backup` wrote `backups/backup-<ts>-aidiscovery_dev.dump` (~79 KiB) and pruned to retention; restore into a scratch DB confirmed 26 tables + row parity, then dropped
 LAST UPDATE VERIFICATION: PASS — live over HTTP as an authenticated admin: draft update → POST publish → 303 + `updates.status=published` + `content_revisions` (`update.status`/`admin`), second draft → `rejected`; unauthorized POST rejected (307 → `/admin/login`) leaving the row `draft`; the published update rendered on the public tool page and the rejected one did not
 LAST RUNS/OBSERVABILITY VERIFICATION: PASS — logged-in `/admin/runs` 200 with the metrics grid (fetched/created/updated/duplicates/invalid/errors/AI/duration)
-LAST BACKUP VERIFICATION: PASS — `npm run db:backup` wrote `backups/backup-<ts>-aidiscovery_dev.dump` (~55 KiB) and pruned to retention; restore into a scratch DB succeeded and was dropped
 LAST AI VERIFICATION:    PARTIAL — scripted-provider integration tests PASS; live Gemini call PENDING (no API key)
 LAST AUTH VERIFICATION:  PASS — live: anon /admin 307 → /admin/login?callbackUrl, credentials login issues authjs.session-token, all admin pages 200, bad password rejected, missing tool 404
 LAST PUBLIC VERIFICATION: PASS — live against the production build: `/`, `/tools`, `/search`, `/about`, `/contact`, `/privacy`, `/terms` 200; `/tools/<slug>`, `/categories/<slug>`, `/collections/<slug>`, `/categories`, `/collections` 200 with ISR cache HIT + expected s-maxage; missing tool/collection → 404; Arabic RTL markup and sample content rendered
-LAST SEO VERIFICATION:   PASS — live against the production build: `/robots.txt` blocks /admin, /api/, /search and points to the absolute sitemap; `/sitemap.xml` 200 (prerendered, 1h) includes home, directory/landing pages and published tool/category/collection URLs with `<lastmod>`; tool detail emits `SoftwareApplication` + `BreadcrumbList` + `FAQPage` JSON-LD, canonical and `og:url`/`og:type`; home emits `WebSite` (with `SearchAction`) + `Organization`; filtered `/tools?q=…` canonicalizes to `/tools` and is `noindex, follow`; `/search` is `noindex`; unmatched URL renders the Arabic 404 page with `noindex, nofollow`
+LAST SEO VERIFICATION:   PASS — live against the production build: `/robots.txt` blocks /admin, /api/, /search and points to the absolute sitemap; `/sitemap.xml` 200 (prerendered, 1h) includes home, directory/landing pages and published tool/category/collection URLs with `<lastmod>`; tool detail emits `SoftwareApplication` + `BreadcrumbList` + `FAQPage` JSON-LD, canonical and `og:url`/`og:type`; home emits `WebSite` (with `SearchAction`) + `Organization`; filtered `/tools?q=…` canonicalizes to `/tools` and is `noindex, follow`; `/search` is `noindex`; unmatched URL renders the Arabic 404 page with `noindex, nofollow`; `/tools` canonical = `http://localhost:3000/tools` with absolute `og:title`/`og:url`; `/alerts/verify|subscribed|unsubscribe` are `noindex`
 LAST MONETIZATION VERIFICATION: PASS — live against the production build: with `ADSENSE_*` empty no ad markup or script is emitted anywhere; with test ad ids set at build time the layout header slot and detail sidebar slot render with the configured client + `data-ad-slot` values and the AdSense loader while unset placements emit nothing; `/api/track/click?tool=sample-chat-assistant` 302s to the stored affiliate URL and persists a click (64-char salted IP hash, UA stored, no raw IP), unknown tool → 404, missing param → 400, non-http(s) destination → 404; demo campaign renders the labelled sponsored blocks on `/` and `/tools` and the "مُموَّل" badge + affiliate disclosure on the tool page; a tool without an affiliate URL keeps a direct outbound CTA
-LAST SECURITY VERIFICATION: PASS — live against the production build: all baseline headers present on `/` (`nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, report-only CSP listing the AdSense origins) with HSTS added only in production; `X-Powered-By` absent; 32 rapid tracked requests from one IP → 30× `302` then `429`; `npm run smoke` 18/18 HTTP end-to-end checks pass; secret-exposure guards green in the suite
+LAST SECURITY VERIFICATION: PASS — live against the production build: all baseline headers present on `/` (`nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, report-only CSP listing the AdSense origins) with HSTS added only in production; `X-Powered-By` absent; 32 rapid tracked requests from one IP → 30× `302` then `429`; `npm run smoke` 28/28 HTTP end-to-end checks pass; secret-exposure guards green in the suite
 ```
 
 Edit this file only with verified facts. The repository and runtime behavior take precedence over this file.

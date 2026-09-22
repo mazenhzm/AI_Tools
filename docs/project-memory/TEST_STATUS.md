@@ -3,23 +3,31 @@
 ```text
 UNIT TESTS:            PASS — pure unit cases (normalize, ai quality/provider/json/schemas/prompts,
                        auth authorization, seo metadata/json-ld, ads resolveAdSlot, security headers,
-                       rate limiter, secret-exposure guards, backup selection, run-metric formatting)
-                       run green as part of the 168-test suite
-INTEGRATION TESTS:     PASS — 168/168 total across 25 files (db schema, ingestion pipeline/rss/update-
-                       monitor, ai enrich, services review/catalog/monetization, action authz, seo
-                       sitemap/robots, monetization tracking/sponsored/rate-limit, security secrets,
-                       ops backup; real Postgres)
-E2E TESTS:             PASS — `npm run smoke` runs 18 HTTP checks against a running production build
-                       (public routes, 404, robots/sitemap, admin 307 guard, tracker 400/404/302,
-                       security headers, no X-Powered-By); 18/18 green. Browser automation still absent
+                       rate limiter, secret-exposure guards, backup selection, run-metric formatting,
+                       ingestion timeout resolution + http retry/backoff, hf model adapter)
+                       run green as part of the 277-test suite
+INTEGRATION TESTS:     PASS — 277/277 total across 37 files (db schema, ingestion pipeline/rss/
+                       update-monitor/runIngestion, model pipeline, ai enrich, services review/catalog/
+                       monetization, action authz, seo sitemap/robots/alert-pages, monetization
+                       tracking/sponsored/rate-limit, security secrets, ops backup, notifications,
+                       worker exit-code subprocess; real Postgres)
+E2E TESTS:             PASS — `npm run smoke` runs 28 HTTP checks against a running production build
+                       (public routes, 404, robots/sitemap incl. models, admin 307 guard, tracker
+                       400/404/302, security headers, no X-Powered-By); 28/28 green. Browser automation
+                       still absent
+WORKER EXIT SIGNAL:    PASS — `tests/ingestion/worker-exit.test.ts` spawns the real worker against the
+                       test DB: exit 0 on success, exit 1 when a source fails (the scheduler alert
+                       signal is now guarded)
 TYPE CHECK:            PASS — `npm run typecheck` (tsc --noEmit) clean
 LINT:                  PASS — `npm run lint` (eslint) clean
 BUILD:                 PASS — `next build` (Next.js 16.3.5 / Turbopack), zero warnings
-DATABASE CHECK:        PASS — migration applied; 19 tables, 47 indexes, pg_trgm present;
+DATABASE CHECK:        PASS — migration applied; 26 tables, 3 migrations, pg_trgm present;
                        seeds idempotent (2x run, no duplicates)
 INGESTION CHECK:       PASS — 8 pipeline cases (success, idempotency, invalid isolation, malformed
-                       feed, network failure, cross-source URL dedupe, metrics); live worker run
-                       against aidiscovery_dev created 2 then deduped 2 on re-run
+                       feed, network failure, cross-source URL dedupe, metrics) + runIngestion
+                       (paces sources, excludes `model:` ones so the tools worker never fails);
+                       live worker run against aidiscovery_dev is idempotent (duplicates on repeat)
+                       and, since P3, no longer fails on model sources
 AI PIPELINE CHECK:     PARTIAL — 29 cases (quality scoring/gate, strict schema rejections, lenient
                        JSON parsing, retry/backoff semantics, prompts, scripted-provider enrichment
                        incl. publish/hold/malformed/permanent-error). Live Gemini call PENDING
@@ -59,7 +67,14 @@ SECURITY CHECK:        PASS (hardening done; enforcement items listed in SECURIT
                        centralized config allowlist, none in app/ or components/, client components never
                        import server-only modules, no sensitive `NEXT_PUBLIC_*` names). Live-verified:
                        baseline headers + report-only CSP on `/`, HSTS in production, no `X-Powered-By`,
-                       tracker 429 after the per-IP budget, `npm run smoke` 18/18
+                       tracker 429 after the per-IP budget, `npm run smoke` 28/28
+BACKUP/RESTORE:        PASS — fresh `npm run db:backup` wrote a 79.2 KiB dump (retention pruned);
+                       a scratch restore confirmed 26 tables and exact row-count parity with the live
+                       dev DB (tools 5, models 4, sources 4, runs 8, categories 4, collections 1)
+SCHEDULING:            PASS — verified Windows Task Scheduler tasks AIDiscovery-IngestionTools /
+                       AIDiscovery-IngestionModels dispatch successfully (LastTaskResult 0, real
+                       worker logs, `ingestion_runs` rows); must be registered with battery allowance
+                       on laptops or stays Queued
 
 ```
 

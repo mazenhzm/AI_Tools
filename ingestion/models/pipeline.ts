@@ -8,6 +8,7 @@ import type { NormalizedModel } from "@/lib/validation/models";
 import { createHttpGet } from "../adapters/http";
 import { classifyError } from "../errors";
 import { resolveModelAdapter } from "./registry";
+import { resolveTimeoutMs } from "../timeout";
 import { normalizeModelItem } from "./normalize";
 import {
   describeModelChanges,
@@ -391,8 +392,7 @@ export async function runModelSource(
   const adapter = resolveModelAdapter(source.adapterKey);
   const timeoutMs =
     options.timeoutMs ??
-    Number((source.config as Record<string, unknown> | null)?.timeoutMs) ??
-    30000;
+    resolveTimeoutMs((source.config as Record<string, unknown> | null)?.timeoutMs);
   const httpGet = options.httpGet ?? createHttpGet(timeoutMs);
   const metrics = emptyMetrics();
   const items: ModelPipelineItemResult[] = [];

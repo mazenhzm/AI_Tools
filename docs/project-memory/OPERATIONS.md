@@ -28,6 +28,25 @@ scheduler's own expression in sync with it.
 - **Docker/Kubernetes**: run the worker image as a `CronJob`/scheduled container with the same env file; give it a shutdown grace period longer than the longest expected run.
 - **CI**: a scheduled pipeline job works, but needs network access to the source feeds and the production database.
 
+### Windows Task Scheduler (verified 2026-09-22)
+
+Verified tasks (registered 2026-09-22, dispatch confirmed by Task Scheduler writing real worker logs):
+
+| Task | Wrapper | Schedule |
+|---|---|---|
+| `AIDiscovery-IngestionTools` | `run-worker-tools.cmd` -> `npm run worker` | daily 02:00, repeat every 6h |
+| `AIDiscovery-IngestionModels` | `run-worker-models.cmd` -> `npm run worker:models` | daily 02:00, repeat every 6h |
+
+Notes from live verification:
+- Wrappers `cmd /c "<temp>\run-worker-*.cmd"` set the repo as CWD, invoke the npm script and append JSON lines to a per-worker log in the same temp dir. That temp dir is used because it is writable from the scheduled (non-admin) context.
+- On-demand dispatch (`schtasks /Run`) executed both tasks: exit result 0, real log lines produced, and `ingestion_runs` rows confirm the runs. The tools worker exits non-zero if any tool source fails; the models worker ends with a `run_summary` even when only model sources were eligible.
+- Task registration must allow battery use: the default settings (`DisallowStartIfOnBatteries`) leave the task stuck "Queued" on laptops running on battery. Register with `AllowStartIfOnBatteries` / `DontStopIfGoingOnBatteries` (this host is a laptop).
+- The tasks run as the interactive user (`InteractiveToken`); they will not dispatch from a non-interactive/service session. There is no in-app scheduler; Task Scheduler (or `schtasks /Create ... /SC ...`) is the dispatcher, matching `INGESTION_CRON` as the documentation-only default.
+
+The scheduled run also surfaced and fixed a real production bug: the tools worker previously selected *all* active sources (including `model:*` ones), which it cannot resolve, so the whole run failed. `runIngestion` now excludes `model:` sources; the tools worker handles tool sources only, the models worker model sources only.
+
+The ingestion worker has retry/backoff for transient HTTP errors (see `docs/project-memory/INGESTION.md`); a scheduled run will surface any source failure via a non-zero exit and a failed `ingestion_runs` row.
+
 Guardrails already in place:
 - The run is idempotent (`tool_sources(source_id, source_item_id)` + dedupe), so an overlapping schedule will not duplicate tools.
 - Each source is isolated; one failing source does not abort the others.
@@ -67,8 +86,9 @@ docker exec aidiscovery-pg dropdb -U aidiscovery aidiscovery_restore_check
 ```
 
 Restore should be rehearsed into a scratch database (never over the live one).
-The backup produced on 2026-09-17 was restored this way: 19 tables and the
-seeded/ingested rows came back intact.
+The backup produced on 2026-09-22 was restored this way: 26 tables and the
+seeded/ingested rows came back intact (verified row count parity: tools 5,
+models 4, sources 4, ingestion runs 8, categories 4, collections 1).
 
 Schedule backups on the same host (or ship the archive off-host — a dump next to
 the database it protects is not a backup). Test restores periodically.
@@ -77,7 +97,7 @@ the database it protects is not a backup). Test restores periodically.
 
 1. `npm run typecheck && npm run lint && npm test` — all green against a real Postgres.
 2. `npm run build` — zero warnings.
-3. `npm run smoke -- --url https://<origin>` — 18/18 checks.
+3. `npm run smoke -- --url https://<origin>` — 28/28 checks.
 4. Environment: real `NEXT_PUBLIC_SITE_URL`, strong `AUTH_SECRET`, production
    `ADMIN_*` rotated after seeding, `GEMINI_API_KEY` if AI enrichment is wanted,
    `ADSENSE_*`/affiliate settings only if monetization is live.

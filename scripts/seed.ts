@@ -528,8 +528,18 @@ async function main() {
     active: true,
   });
 
+  const hfSource = await ensureSource({
+    name: "Hugging Face Model API (inactive)",
+    slug: "hf-models-api",
+    type: "api",
+    adapterKey: "model:huggingface",
+    url: "https://huggingface.co/api/models",
+    config: { limit: 50 },
+    active: false,
+  });
+
   console.log(
-    `[seed] ok — categories=${categories.length} tags=${tags.length} features=${features.length} tools=${tools.length} sources=${sources.length} collection=1 providers=${providers.length} models=${models.length} modelSource=${modelSource.slug}`,
+    `[seed] ok — categories=${categories.length} tags=${tags.length} features=${features.length} tools=${tools.length} sources=${sources.length} collection=1 providers=${providers.length} models=${models.length} modelSource=${modelSource.slug} hfSource=${hfSource.slug}`,
   );
   process.exit(0);
 }

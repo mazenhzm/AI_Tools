@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import sitemap from "@/app/sitemap";
 import robots from "@/app/robots";
+import { metadata as verifyMetadata } from "@/app/(public)/alerts/verify/page";
+import { metadata as subscribedMetadata } from "@/app/(public)/alerts/subscribed/page";
+import { metadata as unsubscribeMetadata } from "@/app/(public)/alerts/unsubscribe/page";
 import { db } from "@/lib/db/db";
 import * as schema from "@/lib/db/schema";
 import { absoluteUrl, siteOrigin } from "@/lib/seo/site";
@@ -98,5 +101,15 @@ describe("robots", () => {
     const result = robots();
     expect(result.sitemap).toBe(absoluteUrl("/sitemap.xml"));
     expect(result.host).toBe(siteOrigin());
+  });
+});
+
+describe("transactional alert pages", () => {
+  it("are never indexed (token query parameters must not be crawled)", () => {
+    for (const metadata of [verifyMetadata, subscribedMetadata, unsubscribeMetadata]) {
+      expect(metadata.robots).toEqual({ index: false, follow: true });
+      const canonical = metadata.alternates?.canonical;
+      expect(typeof canonical).toBe("string");
+    }
   });
 });

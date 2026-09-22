@@ -47,7 +47,7 @@ Gemini is an enrichment engine, never the source of truth. Structured prompts de
 
 ## Ingestion strategy
 
-Adapter pattern: `ingestion/sources/base/` defines interface (`fetch → normalize → validate → return_items`). RSS, product_sources, official adapters. Idempotent by `(source, source_item_id)` and normalized URL. Raw item stored before processing. One bad item never aborts a run.
+Adapter pattern: `ingestion/adapters/` defines `fetch → normalize → validate → return_items` for tools (`fixture:inline`, `rss:generic`, `http.ts` shared HTTP with retry/backoff) and `ingestion/models/` for models (`model:fixture`, `model:huggingface`). `runIngestion` (tools) excludes `model:*` sources; the tools worker and the models worker each run their own source family. Idempotent by `(source, source_item_id)` and normalized URL. Raw item stored before processing. One bad item never aborts a run; transient HTTP errors retry with backoff and respect 429/Retry-After.
 
 ## SEO strategy
 
@@ -63,11 +63,22 @@ No secrets in code/frontend; env-only. Input/output validation everywhere. Auth+
 
 ## Current implementation phase
 
-Phase 1 — Architecture (in progress).
+Production readiness execution protocol (P0–P11). P0–P3, P7–P9 completed and
+verified (see CHANGELOG 2026-09-22 and PROJECT_MAP.md at repo root). P4 (Gemini
+live) BLOCKED-EXTERNAL — needs a real `GEMINI_API_KEY`. P5 (governance policy)
+needs a product-owner decision. P6 (notifications real delivery) BLOCKED-EXTERNAL
+— needs SMTP/telegram credentials.
 
 ## Current project status
 
-Greenfield. Empty repo bootstrapped on this session: toolchain verified (Node 24, Docker, git). No application code yet.
+Implemented and verified against a production build: Arabic-first public site,
+admin dashboard + auth, adapter-based tools and models ingestion, AI enrichment
+layer (ingestion-only until a real Gemini key is configured), quality gate,
+SEO (sitemap/robots/metadata/JSON-LD), monetization (env-driven ads, affiliate
+tracker with rate limiting, sponsored listings), update monitoring, worker
+observability + scheduled execution on Windows Task Scheduler, backup/restore
+drill. Suite: 277/277 tests, smoke 28/28, build clean. See PROJECT_MAP.md for
+per-capability status (IMPLEMENTED / VERIFIED / PARTIAL / BLOCKED).
 
 ## Important constraints
 

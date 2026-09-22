@@ -1,7 +1,8 @@
 import { modelFixtureAdapter } from "./adapter";
+import { hfModelAdapter } from "../adapters/hf-models";
 import type { ModelSourceAdapter } from "./types";
 
-const MODEL_ADAPTERS: ModelSourceAdapter[] = [modelFixtureAdapter];
+const MODEL_ADAPTERS: ModelSourceAdapter[] = [modelFixtureAdapter, hfModelAdapter];
 
 const byKey = new Map(MODEL_ADAPTERS.map((adapter) => [adapter.key, adapter]));
 
