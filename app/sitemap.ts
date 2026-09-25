@@ -15,6 +15,7 @@ const STATIC_ROUTES: MetadataRoute.Sitemap = [
   { url: absoluteUrl("/models"), changeFrequency: "daily", priority: 0.9 },
   { url: absoluteUrl("/categories"), changeFrequency: "weekly", priority: 0.7 },
   { url: absoluteUrl("/collections"), changeFrequency: "weekly", priority: 0.7 },
+  { url: absoluteUrl("/updates"), changeFrequency: "daily", priority: 0.7 },
   { url: absoluteUrl("/about"), changeFrequency: "monthly", priority: 0.3 },
   { url: absoluteUrl("/contact"), changeFrequency: "monthly", priority: 0.2 },
   { url: absoluteUrl("/privacy"), changeFrequency: "yearly", priority: 0.1 },

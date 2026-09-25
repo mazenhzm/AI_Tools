@@ -4,6 +4,7 @@ import { db } from "@/lib/db/db";
 const TABLES = [
   "analytics_events",
   "affiliate_clicks",
+  "field_conflicts",
   "content_revisions",
   "ai_processing_logs",
   "notification_logs",

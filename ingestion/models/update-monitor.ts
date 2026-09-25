@@ -38,6 +38,8 @@ function comparable(value: unknown): string {
   return str;
 }
 
+export { comparable };
+
 /**
  * Compares the stored model facts with a freshly normalized model and returns
  * the human-readable changes plus the dominant update kind. Only factual fields
@@ -183,6 +185,10 @@ export interface RecordModelUpdateInput {
   contentEn?: string;
   sourceUrl: string | null;
   publishedAt: Date | null;
+  /** Fields auto-applied to the model row by the governance model. */
+  autoApplied?: string[];
+  /** Fields gated behind human review (never auto-applied). */
+  pendingReview?: string[];
 }
 
 /**
@@ -223,6 +229,8 @@ export async function recordModelUpdate(
           before: change.before,
           after: change.after,
         })),
+        autoApplied: input.autoApplied ?? [],
+        pendingReview: input.pendingReview ?? [],
       },
       status: "draft",
       publishedAt: input.publishedAt,

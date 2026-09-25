@@ -25,7 +25,7 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 const UPDATE_ACTION_LABELS: Record<string, string> = {
-  published: "نشر التحديث (مع الإشعارات)",
+  published: "نشر التحديث",
   rejected: "رفض التحديث",
   pending_review: "إرسال للمراجعة",
 };

@@ -14,7 +14,6 @@ import {
   updateModelFields,
   type ModelStatusValue,
 } from "@/lib/services/model-review";
-import { createAlertSubscription } from "@/lib/notifications/service";
 
 async function currentUser() {
   const session = await auth();
@@ -27,93 +26,6 @@ function toMessage(value: string): string {
 
 const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
-
-// ---------------------------------------------------------------------------
-// Public: change alerts
-// ---------------------------------------------------------------------------
-
-/**
- * "Alert me on changes" for a single model (email). Creates a pending
- * subscription; the success page tells the user to verify via email (with a
- * development-only inline verify link when no SMTP is configured).
- */
-export async function subscribeModelAlertAction(
-  formData: FormData,
-): Promise<void> {
-  const modelId = String(formData.get("modelId") ?? "");
-  const email = String(formData.get("email") ?? "");
-  if (!isUuid(modelId)) redirect("/models?message=" + toMessage("طلب غير صالح"));
-
-  const [model] = await db
-    .select({ slug: s.models.slug, id: s.models.id })
-    .from(s.models)
-    .where(eq(s.models.id, modelId))
-    .limit(1);
-  if (!model) {
-    redirect("/models?message=" + toMessage("النموذج غير موجود"));
-  }
-  const back = `/models/${model.slug}`;
-
-  const result = await createAlertSubscription({
-    receiver: email,
-    channel: "email",
-    targetType: "model",
-    targetId: modelId,
-  });
-  if (!result.ok || !result.subscription) {
-    redirect(`${back}?message=${toMessage(result.error ?? "تعذر الاشتراك")}`);
-  }
-
-  redirect(
-    `/alerts/subscribed?targetType=model&targetId=${encodeURIComponent(
-      result.subscription.targetId,
-    )}&token=${encodeURIComponent(result.subscription.token)}`,
-  );
-}
-
-/** Admin: subscribe for any extra subscriber (e.g. a Telegram chat id). */
-export async function createAdminSubscriptionAction(
-  formData: FormData,
-): Promise<void> {
-  const targetType = String(formData.get("targetType") ?? "");
-  const targetId = String(
-    formData.get(targetType === "model" ? "targetIdModel" : "targetIdProvider") ??
-      "",
-  );
-  const channel = String(formData.get("channel") ?? "");
-  const receiver = String(formData.get("receiver") ?? "");
-  const back = "/admin/subscriptions";
-
-  if (
-    (targetType !== "model" && targetType !== "provider") ||
-    (channel !== "email" && channel !== "telegram") ||
-    !isUuid(targetId)
-  ) {
-    redirect(`${back}?message=${toMessage("طلب غير صالح")}`);
-  }
-
-  const user = await currentUser();
-  try {
-    if (!user) throw new AuthorizationError("Authentication required");
-    const result = await createAlertSubscription({
-      receiver,
-      channel,
-      targetType,
-      targetId,
-    });
-    revalidatePath("/admin/subscriptions");
-    revalidatePath("/admin");
-    const message = result.ok
-      ? result.outcome === "created"
-        ? "تم إنشاء الاشتراك (بانتظار التحقق)"
-        : "الاشتراك موجود أو أعيد تفعيله"
-      : (result.error ?? "تعذر إنشاء الاشتراك");
-    redirect(`${back}?message=${toMessage(message)}`);
-  } catch (error) {
-    if (error instanceof AuthorizationError) redirect("/admin/login");
-    throw error;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Admin: model review

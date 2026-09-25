@@ -16,6 +16,11 @@ import {
   dominantKind,
   recordModelUpdate,
 } from "./update-monitor";
+import {
+  modelPatchFromChanges,
+  partitionModelChanges,
+} from "./governance";
+import { recordModelFieldConflicts } from "./conflicts";
 import type {
   ModelPipelineItemResult,
   ModelPipelineMetrics,
@@ -210,6 +215,7 @@ async function processModelItem(args: ProcessArgs): Promise<void> {
 
     const changes = detectModelChanges(model, normalized);
     if (changes.length > 0) {
+      const { autoApply, pendingReview } = partitionModelChanges(changes);
       const outcome = await recordModelUpdate(database, {
         modelId: model.id,
         changes,
@@ -220,26 +226,26 @@ async function processModelItem(args: ProcessArgs): Promise<void> {
           normalized.sourceUrl ??
           (typeof raw.raw.link === "string" ? raw.raw.link : null),
         publishedAt: normalized.publishedAt,
+        autoApplied: autoApply.map((change) => change.field),
+        pendingReview: pendingReview.map((change) => change.field),
       });
       if (outcome === "created") {
         metrics.updated += 1;
-        await database
-          .update(s.models)
-          .set({
-            name: normalized.name,
-            modelIdentifier: normalized.modelIdentifier ?? "",
-            releaseDate: normalized.releaseDate,
-            currentVersion: normalized.currentVersion,
-            isDownloadable: normalized.isDownloadable,
-            contextWindow: normalized.contextWindow,
-            inputPricePer1M: normalized.inputPricePer1M,
-            outputPricePer1M: normalized.outputPricePer1M,
-            pricingNotes: normalized.pricingNotes,
-            modalities: normalized.modalities,
-            websiteUrl: normalized.websiteUrl,
-            updatedAt: new Date(),
-          })
-          .where(eq(s.models.id, model.id));
+        // Hybrid governance: only AUTO_APPLY fields land on the model row.
+        // Pricing/open-source changes stay reviewer-gated (snapshot.pendingReview)
+        // and are applied only after an admin/editor approves the update.
+        if (autoApply.length > 0) {
+          await database
+            .update(s.models)
+            .set({ ...modelPatchFromChanges(autoApply), updatedAt: new Date() })
+            .where(eq(s.models.id, model.id));
+        }
+        await recordModelFieldConflicts({
+          database,
+          modelId: model.id,
+          sourceId: source.id,
+          changes,
+        });
         if (existing.anchored) {
           await database
             .update(s.modelSources)

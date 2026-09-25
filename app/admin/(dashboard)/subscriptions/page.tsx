@@ -1,10 +1,5 @@
 import Link from "next/link";
-import { createAdminSubscriptionAction } from "@/lib/actions/models";
-import {
-  listSubscriptionsForAdmin,
-} from "@/lib/db/queries/admin";
-import { db } from "@/lib/db/db";
-import * as s from "@/lib/db/schema";
+import { listSubscriptionsForAdmin } from "@/lib/db/queries/admin";
 import {
   subChannelLabel,
   subStatusLabel,
@@ -28,22 +23,12 @@ export default async function AdminSubscriptionsPage({
   const page = Number(params.page ?? "1");
   const { message } = params;
 
-  const [result, models, providers] = await Promise.all([
-    listSubscriptionsForAdmin({
-      channel: params.channel,
-      status: params.status,
-      page: Number.isFinite(page) ? page : 1,
-      pageSize: 20,
-    }),
-    db
-      .select({ id: s.models.id, name: s.models.name })
-      .from(s.models)
-      .orderBy(s.models.name),
-    db
-      .select({ id: s.modelProviders.id, name: s.modelProviders.name })
-      .from(s.modelProviders)
-      .orderBy(s.modelProviders.name),
-  ]);
+  const result = await listSubscriptionsForAdmin({
+    channel: params.channel,
+    status: params.status,
+    page: Number.isFinite(page) ? page : 1,
+    pageSize: 20,
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -59,75 +44,6 @@ export default async function AdminSubscriptionsPage({
           {message}
         </p>
       ) : null}
-
-      <section className="flex flex-col gap-2 rounded-xl border border-border p-4 text-sm">
-        <h2 className="font-semibold">إضافة اشتراك (تيليغرام أو بريد)</h2>
-        <form action={createAdminSubscriptionAction} className="grid gap-3 md:grid-cols-2">
-          <label className="flex flex-col gap-1">
-            <span>القناة</span>
-            <select
-              name="channel"
-              defaultValue="telegram"
-              className="rounded-md border border-border bg-background px-3 py-2"
-            >
-              <option value="telegram">تيليغرام</option>
-              <option value="email">بريد إلكتروني</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span>المستقبِل (بريد إلكتروني أو معرّف محادثة تيليغرام)</span>
-            <input
-              name="receiver"
-              required
-              placeholder="user@example.com أو 123456789"
-              className="rounded-md border border-border bg-background px-3 py-2"
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span>نوع الهدف</span>
-            <select
-              name="targetType"
-              defaultValue="model"
-              className="rounded-md border border-border bg-background px-3 py-2"
-            >
-              <option value="model">نموذج</option>
-              <option value="provider">موفّر / شركة</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1">
-            <span>النموذج (عند اختيار «نموذج»)</span>
-            <select
-              name="targetIdModel"
-              className="rounded-md border border-border bg-background px-3 py-2"
-            >
-              {models.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 md:col-span-2">
-            <span>الموفّر (عند اختيار «موفّر»)</span>
-            <select
-              name="targetIdProvider"
-              className="rounded-md border border-border bg-background px-3 py-2"
-            >
-              {providers.map((provider) => (
-                <option key={provider.id} value={provider.id}>
-                  {provider.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="submit"
-            className="rounded-md bg-primary px-4 py-2 text-primary-foreground md:col-span-2"
-          >
-            إنشاء الاشتراك
-          </button>
-        </form>
-      </section>
 
       <form method="get" className="grid gap-3 rounded-xl border border-border p-4 sm:grid-cols-3">
         <label className="flex flex-col gap-1 text-sm">

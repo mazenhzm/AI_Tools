@@ -136,6 +136,12 @@ export const notificationStatus = pgEnum("notification_status", [
   "skipped",
 ]);
 
+export const conflictStatus = pgEnum("conflict_status", [
+  "open",
+  "resolved",
+  "dismissed",
+]);
+
 const uuidPk = () => uuid("id").primaryKey().defaultRandom();
 
 const now = () =>
@@ -389,6 +395,12 @@ export const sources = pgTable(
     url: text("url"),
     active: boolean("active").notNull().default(true),
     adapterKey: text("adapter_key").notNull().default("rss:generic"),
+    /**
+     * Source trust tier used by the hybrid governance model. Higher tiers
+     * carry more authority when sources disagree (5 = official API/direct
+     * vendor claims, 0 = unclassified). Seeded per source; never invented.
+     */
+    authorityTier: integer("authority_tier").notNull().default(0),
     config: jsonb("config")
       .$type<Record<string, unknown>>()
       .notNull()
@@ -847,5 +859,58 @@ export const notificationLogs = pgTable(
       t.channel,
     ),
     index("notification_logs_sub_idx").on(t.subscriptionId, t.status),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Governance: detected cross-source field conflicts. When two sources report
+// different values for the same factual field of an entity, an open conflict
+// is recorded and must be resolved by an editor/admin (kept fact-only, never
+// auto-applied). Resolution applies the chosen value to the entity row and
+// writes a content revision (rollback history).
+// ---------------------------------------------------------------------------
+
+export const fieldConflicts = pgTable(
+  "field_conflicts",
+  () => ({
+    id: uuidPk(),
+    entityType: text("entity_type").notNull(),
+    entityId: uuid("entity_id").notNull(),
+    field: text("field").notNull(),
+    storedValue: jsonb("stored_value").$type<unknown>(),
+    valueA: jsonb("value_a").$type<unknown>(),
+    valueB: jsonb("value_b").$type<unknown>(),
+    sourceAId: uuid("source_a_id").references(() => sources.id, {
+      onDelete: "restrict",
+    }),
+    sourceBId: uuid("source_b_id").references(() => sources.id, {
+      onDelete: "restrict",
+    }),
+    status: conflictStatus("status").notNull().default("open"),
+    resolution: text("resolution"),
+    resolvedValue: jsonb("resolved_value").$type<unknown>(),
+    editorId: uuid("editor_id").references(() => administrators.id, {
+      onDelete: "set null",
+    }),
+    detectedAt: timestamp("detected_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    resolvedAt: timestamp("resolved_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    createdAt: now(),
+    updatedAt: updatedNow(),
+  }),
+  (t) => [
+    uniqueIndex("field_conflicts_open_idx").on(
+      t.entityType,
+      t.entityId,
+      t.field,
+      t.sourceAId,
+      t.sourceBId,
+    ).where(sql`${t.status} = 'open'`),
+    index("field_conflicts_status_idx").on(t.status, t.detectedAt),
+    index("field_conflicts_entity_idx").on(t.entityId, t.field),
   ],
 );

@@ -129,7 +129,7 @@ describe("transitionModelStatus", () => {
 });
 
 describe("setModelUpdateStatus", () => {
-  it("publishing a draft update makes it public and triggers a dispatch", async () => {
+  it("publishing a draft update makes it public and triggers a dispatch (legacy notify: true)", async () => {
     const model = await seedModel("published");
     const update = await seedUpdate(model.id);
 
@@ -137,6 +137,7 @@ describe("setModelUpdateStatus", () => {
       actor: admin,
       modelUpdateId: update.id,
       to: "published",
+      notify: true,
       providersOverride: noOpProviders,
     });
     expect(result.ok).toBe(true);
@@ -153,6 +154,21 @@ describe("setModelUpdateStatus", () => {
     expect(events).toHaveLength(1);
   });
 
+  it("does not dispatch by default (notify must be requested explicitly)", async () => {
+    const model = await seedModel("published");
+    const update = await seedUpdate(model.id);
+
+    const result = await setModelUpdateStatus({
+      actor: admin,
+      modelUpdateId: update.id,
+      to: "published",
+      providersOverride: noOpProviders,
+    });
+    expect(result.ok).toBe(true);
+    expect(result.notified?.triggered).toBeUndefined();
+    expect((await db.select().from(s.notificationEvents)).length).toBe(0);
+  });
+
   it("never re-notifies a re-published update (one event per update)", async () => {
     const model = await seedModel("published");
     const update = await seedUpdate(model.id);
@@ -161,6 +177,7 @@ describe("setModelUpdateStatus", () => {
       actor: admin,
       modelUpdateId: update.id,
       to: "published",
+      notify: true,
       providersOverride: noOpProviders,
     });
     expect(first.notified?.triggered).toBe(true);
@@ -170,18 +187,77 @@ describe("setModelUpdateStatus", () => {
       actor: admin,
       modelUpdateId: update.id,
       to: "pending_review",
+      notify: true,
       providersOverride: noOpProviders,
     });
     const republish = await setModelUpdateStatus({
       actor: admin,
       modelUpdateId: update.id,
       to: "published",
+      notify: true,
       providersOverride: noOpProviders,
     });
     expect(republish.ok).toBe(true);
     expect(republish.notified?.triggered).toBe(false);
 
     expect((await db.select().from(s.notificationEvents)).length).toBe(1);
+  });
+
+  it("applies reviewer-gated snapshot facts on approve and records revisions", async () => {
+    const model = await seedModel("published");
+    await db
+      .update(s.models)
+      .set({ inputPricePer1M: "5.00", outputPricePer1M: "9.00" })
+      .where(eq(s.models.id, model.id));
+
+    const [update] = await db
+      .insert(s.modelUpdates)
+      .values({
+        modelId: model.id,
+        kind: "pricing",
+        title: "تغيير السعر",
+        contentAr: "ارتفع سعر الإدخال",
+        sourceUrl: `https://sample.example.com/price/${Math.random()}`,
+        status: "draft",
+        snapshot: {
+          changes: [
+            { field: "inputPricePer1M", before: "5.00", after: 7 },
+            { field: "outputPricePer1M", before: "9.00", after: 12 },
+            { field: "contextWindow", before: null, after: 128000 },
+          ],
+          autoApplied: ["contextWindow"],
+          pendingReview: ["inputPricePer1M", "outputPricePer1M"],
+        },
+      })
+      .returning();
+
+    // Approving applies ONLY the pendingReview (price) facts, never auto ones twice.
+    const result = await setModelUpdateStatus({
+      actor: admin,
+      modelUpdateId: update.id,
+      to: "approved",
+    });
+    expect(result.ok).toBe(true);
+
+    const [afterApprove] = await db
+      .select()
+      .from(s.models)
+      .where(eq(s.models.id, model.id));
+    expect(Number(afterApprove.inputPricePer1M)).toBe(7);
+    expect(Number(afterApprove.outputPricePer1M)).toBe(12);
+    // contextWindow was NOT in pendingReview (auto-applied at detection).
+    expect(afterApprove.contextWindow).toBeNull();
+
+    const revisions = await db
+      .select()
+      .from(s.contentRevisions)
+      .where(
+        eq(s.contentRevisions.entityId, model.id),
+      );
+    const factRevisions = revisions.filter((revision) =>
+      ["inputPricePer1M", "outputPricePer1M"].includes(revision.field),
+    );
+    expect(factRevisions.length).toBe(2);
   });
 });
 

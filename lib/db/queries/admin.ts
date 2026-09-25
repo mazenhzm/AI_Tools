@@ -1,4 +1,5 @@
-import { and, count, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@/lib/db/db";
 import { db as defaultDb } from "@/lib/db/db";
 import * as s from "@/lib/db/schema";
@@ -516,4 +517,131 @@ export async function listNotificationEventsForAdmin(
     .limit(50);
 
   return { events, logs, total: Number(totalRow?.value ?? 0), page, pageSize };
+}
+
+// ---------------------------------------------------------------------------
+// Governance queue (admin)
+// ---------------------------------------------------------------------------
+
+const conflictSourceA = alias(s.sources, "conflict_source_a");
+const conflictSourceB = alias(s.sources, "conflict_source_b");
+
+export interface GovernanceOpenConflict {
+  id: string;
+  entityId: string;
+  entityName: string | null;
+  entitySlug: string | null;
+  field: string;
+  storedValue: unknown;
+  valueA: unknown;
+  valueB: unknown;
+  sourceAId: string | null;
+  sourceAName: string | null;
+  sourceATier: number | null;
+  sourceBId: string | null;
+  sourceBName: string | null;
+  sourceBTier: number | null;
+  detectedAt: Date;
+}
+
+export interface GovernancePendingModelUpdate {
+  id: string;
+  modelId: string;
+  modelName: string;
+  modelSlug: string;
+  kind: string;
+  title: string;
+  contentAr: string;
+  status: ContentStatusValue;
+  createdAt: Date;
+  autoApplied: string[];
+  pendingReview: string[];
+}
+
+export interface GovernanceQueue {
+  openConflicts: GovernanceOpenConflict[];
+  pendingModelUpdates: GovernancePendingModelUpdate[];
+}
+
+/**
+ * Decision queue for the hybrid governance model. Everything here is
+ * human-gated: open cross-source field conflicts (never auto-resolved) and
+ * draft/pending model updates whose reviewer-gated facts (pricing, open-source
+ * classification) await an editor's approve/publish call.
+ */
+export async function getGovernanceQueue(
+  database: Db = defaultDb,
+): Promise<GovernanceQueue> {
+  const openConflicts = await database
+    .select({
+      id: s.fieldConflicts.id,
+      entityId: s.fieldConflicts.entityId,
+      entityName: s.models.name,
+      entitySlug: s.models.slug,
+      field: s.fieldConflicts.field,
+      storedValue: s.fieldConflicts.storedValue,
+      valueA: s.fieldConflicts.valueA,
+      valueB: s.fieldConflicts.valueB,
+      sourceAId: s.fieldConflicts.sourceAId,
+      sourceAName: conflictSourceA.name,
+      sourceATier: conflictSourceA.authorityTier,
+      sourceBId: s.fieldConflicts.sourceBId,
+      sourceBName: conflictSourceB.name,
+      sourceBTier: conflictSourceB.authorityTier,
+      detectedAt: s.fieldConflicts.detectedAt,
+    })
+    .from(s.fieldConflicts)
+    .leftJoin(s.models, eq(s.fieldConflicts.entityId, s.models.id))
+    .leftJoin(conflictSourceA, eq(s.fieldConflicts.sourceAId, conflictSourceA.id))
+    .leftJoin(conflictSourceB, eq(s.fieldConflicts.sourceBId, conflictSourceB.id))
+    .where(eq(s.fieldConflicts.status, "open"))
+    .orderBy(desc(s.fieldConflicts.detectedAt))
+    .limit(100);
+
+  const pendingRows = await database
+    .select({
+      id: s.modelUpdates.id,
+      modelId: s.modelUpdates.modelId,
+      modelName: s.models.name,
+      modelSlug: s.models.slug,
+      kind: s.modelUpdates.kind,
+      title: s.modelUpdates.title,
+      contentAr: s.modelUpdates.contentAr,
+      status: s.modelUpdates.status,
+      createdAt: s.modelUpdates.createdAt,
+      snapshot: s.modelUpdates.snapshot,
+    })
+    .from(s.modelUpdates)
+    .innerJoin(s.models, eq(s.modelUpdates.modelId, s.models.id))
+    .where(inArray(s.modelUpdates.status, ["pending_review", "draft"]))
+    .orderBy(desc(s.modelUpdates.createdAt))
+    .limit(100);
+
+  const pendingModelUpdates: GovernancePendingModelUpdate[] = pendingRows.map(
+    (row) => {
+      const snapshot = (row.snapshot ?? {}) as {
+        autoApplied?: unknown;
+        pendingReview?: unknown;
+      };
+      return {
+        id: row.id,
+        modelId: row.modelId,
+        modelName: row.modelName,
+        modelSlug: row.modelSlug,
+        kind: row.kind,
+        title: row.title,
+        contentAr: row.contentAr,
+        status: row.status,
+        createdAt: row.createdAt,
+        autoApplied: Array.isArray(snapshot.autoApplied)
+          ? snapshot.autoApplied.map(String)
+          : [],
+        pendingReview: Array.isArray(snapshot.pendingReview)
+          ? snapshot.pendingReview.map(String)
+          : [],
+      };
+    },
+  );
+
+  return { openConflicts, pendingModelUpdates };
 }

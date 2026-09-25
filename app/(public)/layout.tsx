@@ -9,6 +9,7 @@ const NAV = [
   { href: "/models", label: "النماذج" },
   { href: "/categories", label: "التصنيفات" },
   { href: "/collections", label: "القوائم" },
+  { href: "/updates", label: "آخر التحديثات" },
 ];
 
 export default async function PublicLayout({

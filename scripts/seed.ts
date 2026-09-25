@@ -100,13 +100,26 @@ async function ensureSource(v: {
   url?: string | null;
   config?: Record<string, unknown>;
   active?: boolean;
+  /**
+   * Trust tier (see schema `sources.authorityTier`): 5 = official API/direct
+   * vendor claims, 0 = unclassified. Seeded per real source, never invented.
+   */
+  authorityTier?: number;
 }) {
   const [existing] = await db
     .select()
     .from(s.sources)
     .where(eq(s.sources.slug, v.slug))
     .limit(1);
-  if (existing) return existing;
+  if (existing) {
+    if (v.authorityTier !== undefined && existing.authorityTier !== v.authorityTier) {
+      await db
+        .update(s.sources)
+        .set({ authorityTier: v.authorityTier, updatedAt: new Date() })
+        .where(eq(s.sources.id, existing.id));
+    }
+    return existing;
+  }
   const [row] = await db
     .insert(s.sources)
     .values({
@@ -117,6 +130,7 @@ async function ensureSource(v: {
       url: v.url ?? null,
       config: v.config ?? {},
       active: v.active ?? true,
+      authorityTier: v.authorityTier ?? 0,
     })
     .returning();
   return row;
@@ -343,6 +357,8 @@ async function main() {
       adapterKey: "fixture:inline",
       config: { fixturePath: "data/fixtures/sample-feed.xml" },
       active: true,
+      // Structured developer-controlled fixture: exact but synthetic.
+      authorityTier: 2,
     }),
     ensureSource({
       name: "[Sample] RSS Source (inactive)",
@@ -351,6 +367,8 @@ async function main() {
       adapterKey: "rss:generic",
       url: "https://example.com/feed.xml",
       active: false,
+      // Unverified RSS feed: lowest trust.
+      authorityTier: 1,
     }),
   ]);
 
@@ -526,6 +544,8 @@ async function main() {
     adapterKey: "model:fixture",
     config: { fixtureInline: modelFixtureInline },
     active: true,
+    // Structured developer-controlled fixture: exact but synthetic.
+    authorityTier: 2,
   });
 
   const hfSource = await ensureSource({
@@ -536,6 +556,8 @@ async function main() {
     url: "https://huggingface.co/api/models",
     config: { limit: 50 },
     active: false,
+    // Official vendor API: highest trust tier.
+    authorityTier: 5,
   });
 
   console.log(

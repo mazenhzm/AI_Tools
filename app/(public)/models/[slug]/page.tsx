@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { JsonLd } from "@/components/seo/json-ld";
-import { subscribeModelAlertAction } from "@/lib/actions/models";
 import {
   getModelBySlug,
   listPublicModelSlugs,
@@ -231,29 +230,17 @@ export default async function ModelDetailPage({
           </section>
 
           <section className="rounded-xl border border-border p-4 text-sm">
-            <h2 className="mb-2 font-semibold">نبّهني عند التغييرات</h2>
+            <h2 className="mb-2 font-semibold">تابِع تغيّرات هذا النموذج</h2>
             <p className="mb-3 text-xs text-muted-foreground">
-              اشترك بالبريد لتلقي إشعار عند تغيّر أسعار هذا النموذج أو إصداره أو
-              نافذة سياقه أو توافره. لن نرسل لك أي بريد آخر.
+              ننشر هنا كل تغيّر في الأسعار أو الإصدار أو نافذة السياق بمجرد رصده
+              ومراجعته. تابع صفحة آخر التحديثات لمتابعة جميع النماذج.
             </p>
-            <form action={subscribeModelAlertAction} className="flex flex-col gap-2">
-              <input type="hidden" name="modelId" value={model.id} />
-              <input
-                type="email"
-                name="email"
-                required
-                dir="ltr"
-                placeholder="you@example.com"
-                aria-label="بريدك الإلكتروني"
-                className="rounded-md border border-border bg-background px-3 py-2"
-              />
-              <button
-                type="submit"
-                className="rounded-md bg-primary px-4 py-2 text-primary-foreground"
-              >
-                اشترك بالتغييرات
-              </button>
-            </form>
+            <Link
+              href="/updates"
+              className="inline-block rounded-md bg-primary px-4 py-2 text-primary-foreground"
+            >
+              آخر التحديثات
+            </Link>
           </section>
         </aside>
       </div>

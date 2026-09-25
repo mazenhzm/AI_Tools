@@ -245,6 +245,11 @@ export default async function ToolDetailPage({
                   </li>
                 ))}
               </ul>
+              <p className="text-xs text-muted-foreground">
+                <Link href="/updates" className="text-primary hover:underline">
+                  تابع كل تغيّرات النماذج والأدوات في آخر التحديثات
+                </Link>
+              </p>
             </section>
           ) : null}
         </div>

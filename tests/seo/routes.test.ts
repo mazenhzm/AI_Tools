@@ -1,9 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import sitemap from "@/app/sitemap";
 import robots from "@/app/robots";
-import { metadata as verifyMetadata } from "@/app/(public)/alerts/verify/page";
-import { metadata as subscribedMetadata } from "@/app/(public)/alerts/subscribed/page";
-import { metadata as unsubscribeMetadata } from "@/app/(public)/alerts/unsubscribe/page";
+import { metadata as updatesMetadata } from "@/app/(public)/updates/page";
 import { db } from "@/lib/db/db";
 import * as schema from "@/lib/db/schema";
 import { absoluteUrl, siteOrigin } from "@/lib/seo/site";
@@ -63,6 +61,7 @@ describe("sitemap", () => {
     expect(urls).toContain(absoluteUrl("/tools"));
     expect(urls).toContain(absoluteUrl("/categories"));
     expect(urls).toContain(absoluteUrl("/collections"));
+    expect(urls).toContain(absoluteUrl("/updates"));
     expect(urls).toContain(absoluteUrl("/categories/cat"));
     expect(urls).toContain(absoluteUrl("/tools/published-tool"));
     expect(urls).toContain(absoluteUrl("/collections/published-collection"));
@@ -104,12 +103,11 @@ describe("robots", () => {
   });
 });
 
-describe("transactional alert pages", () => {
-  it("are never indexed (token query parameters must not be crawled)", () => {
-    for (const metadata of [verifyMetadata, subscribedMetadata, unsubscribeMetadata]) {
-      expect(metadata.robots).toEqual({ index: false, follow: true });
-      const canonical = metadata.alternates?.canonical;
-      expect(typeof canonical).toBe("string");
-    }
+describe("website-first updates page", () => {
+  it("is an indexable page with an absolute canonical", () => {
+    expect(updatesMetadata.robots).toEqual({ index: true, follow: true });
+    const canonical = updatesMetadata.alternates?.canonical;
+    expect(typeof canonical).toBe("string");
+    expect(canonical).toContain("/updates");
   });
 });

@@ -74,8 +74,10 @@ export const env = {
   backupDir: process.env.BACKUP_DIR ?? "backups",
   backupRetention: Number(process.env.BACKUP_RETENTION ?? 7),
 
-  // --- Change alerts / notifications ---
-  notificationsEnabled: process.env.NOTIFICATIONS_ENABLED !== "false",
+  // --- Change alerts / notifications (DISABLED in v3 / P6 cancelled) ---
+  // Notifications are retired: end-user visible flows are website-first (/updates).
+  // The flag defaults to false and is only opt-in true for historical/legacy flows.
+  notificationsEnabled: process.env.NOTIFICATIONS_ENABLED === "true",
   emailFrom: process.env.EMAIL_FROM ?? "",
   smtpHost: process.env.EMAIL_SMTP_HOST ?? "",
   smtpPort: Number(process.env.EMAIL_SMTP_PORT ?? 587),

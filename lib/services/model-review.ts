@@ -4,6 +4,7 @@ import type { Db } from "@/lib/db/db";
 import { db as defaultDb } from "@/lib/db/db";
 import * as s from "@/lib/db/schema";
 import type { NotificationProviderSet } from "@/lib/notifications/types";
+import { comparable } from "@/ingestion/models/update-monitor";
 
 export type ModelStatusValue = (typeof s.contentStatus.enumValues)[number];
 
@@ -95,8 +96,10 @@ export async function transitionModelStatus(args: {
 
 /**
  * Human review of a detected model change. `published` gates public
- * visibility and triggers the change-notification dispatch (one event per
- * update; re-pubblications never re-notify).
+ * visibility. Approving (`approved`) or publishing (`published`) an update
+ * applies its REVIEW_REQUIRED snapshot facts to the model row (pricing and
+ * open-source classification are never auto-applied by the agent). The legacy
+ * notification dispatch only runs when explicitly requested (`notify: true`).
  */
 export async function setModelUpdateStatus(args: {
   actor: unknown;
@@ -147,10 +150,49 @@ export async function setModelUpdateStatus(args: {
       reason: args.reason ?? "admin",
       editorId: actor.id,
     });
+
+    // Apply reviewer-gated facts on approval/publication. Idempotent: a field
+    // the row already holds is skipped. Every application is recorded as a
+    // content revision (rollback history).
+    if (args.to === "published" || args.to === "approved") {
+      const snapshot = (update.snapshot ?? {}) as {
+        changes?: Array<{ field: string; before: unknown; after: unknown }>;
+        pendingReview?: string[];
+      };
+      const pendingFields = new Set(snapshot.pendingReview ?? []);
+      const pending = (snapshot.changes ?? []).filter((change) =>
+        pendingFields.has(change.field),
+      );
+      if (pending.length > 0) {
+        const [modelRow] = await tx
+          .select()
+          .from(s.models)
+          .where(eq(s.models.id, update.modelId))
+          .limit(1);
+        for (const change of pending) {
+          const before =
+            modelRow ? (modelRow as Record<string, unknown>)[change.field] ?? null : null;
+          if (comparable(before) === comparable(change.after)) continue;
+          await tx
+            .update(s.models)
+            .set({ [change.field]: change.after, updatedAt: new Date() })
+            .where(eq(s.models.id, update.modelId));
+          await tx.insert(s.contentRevisions).values({
+            entityType: "model",
+            entityId: update.modelId,
+            field: change.field,
+            before: { value: before },
+            after: { value: change.after, sourceUrl: update.sourceUrl },
+            reason: "admin",
+            editorId: actor.id,
+          });
+        }
+      }
+    }
   });
 
   let notified: ModelStatusResult["notified"];
-  if (args.to === "published" && (args.notify ?? true)) {
+  if (args.to === "published" && (args.notify ?? false)) {
     const service = await import("@/lib/notifications/service");
     const providers =
       args.providersOverride ??

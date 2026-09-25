@@ -11,6 +11,7 @@ const NAV = [
   { href: "/admin/tags", label: "الوسوم" },
   { href: "/admin/collections", label: "القوائم" },
   { href: "/admin/models", label: "النماذج" },
+  { href: "/admin/governance", label: "الحوكمة" },
   { href: "/admin/sources", label: "المصادر" },
   { href: "/admin/runs", label: "التشغيلات" },
   { href: "/admin/subscriptions", label: "الاشتراكات" },
